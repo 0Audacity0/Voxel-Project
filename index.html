@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voxel Project</title>
+<style>
+:root{color-scheme:dark;--bg:#17191d;--panel:#25272b;--line:#41444a;--text:#e8e8e8;--muted:#a9adb4;--accent:#c5c9ce}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:12px Arial,Helvetica,sans-serif}
+#wrap{position:absolute;inset:0;display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;background:#2a2c30;border-bottom:1px solid #111;z-index:2;min-height:42px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+h1{font-size:15px;color:#f2f2f2;margin:0;letter-spacing:.7px;white-space:nowrap}
+.sub{font-size:10px;color:#b4b7bc;white-space:nowrap}
+#topButtons{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+#videoOverlay{display:none;position:fixed;inset:0;background:#000d;z-index:100;align-items:center;justify-content:center;padding:18px}
+#videoOverlay.show{display:flex}
+#videoWindow{width:min(900px,96vw);background:#22252a;border:1px solid #666;padding:8px;box-shadow:0 8px 32px #000}
+#videoWindowHead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+#projectVideo{display:block;width:100%;max-height:78vh;background:#000}
+button{font:inherit;color:var(--text);background:#383b40;border:1px solid #111;padding:5px 8px;cursor:pointer;box-shadow:inset 0 1px #555;white-space:nowrap}
+button:hover{border-color:#b7bdc5;background:#464a50}button.active{background:#50565e;border-color:#c9cdd2;color:#fff;box-shadow:inset 0 0 0 1px #777}
+#menubar{display:flex;gap:0;background:#35373b;border-bottom:1px solid #111;padding:0 4px;min-height:28px;align-items:center;position:relative;z-index:5}
+.menuwrap{position:relative;height:28px;display:flex;align-items:center}
+.menutrigger{border:0;box-shadow:none;background:transparent;padding:6px 10px;height:27px}
+.menutrigger:hover,.menutrigger.open{background:#4a4d52;border-color:transparent}
+.dropdown{display:none;position:absolute;top:27px;left:0;min-width:185px;padding:4px;background:#292b2f;border:1px solid #090a0b;box-shadow:2px 3px 8px #000b;z-index:20}
+.dropdown.show{display:flex;flex-direction:column}
+.dropdown button{border:0;box-shadow:none;text-align:left;background:transparent;padding:7px 10px}
+.dropdown button:hover{background:#4b4f55}
+#speedReadout{margin-left:auto;padding:5px 8px;color:#e0e2e5;font-size:10px;white-space:nowrap}
+#workspace{display:flex;min-height:0;flex:1}
+#stage{position:relative;flex:1;min-width:0;min-height:0;background:#050608;border-right:1px solid #090a0b}
+canvas{width:100%;height:100%;display:block;image-rendering:pixelated;cursor:crosshair;touch-action:none}
+aside{width:238px;flex-shrink:0;background:#292b2f;border-left:1px solid #4a4d52;padding:7px;overflow:auto}
+.section{font-size:10px;color:#d5d7da;font-weight:bold;text-transform:uppercase;letter-spacing:.7px;margin:4px 0 7px;padding-bottom:5px;border-bottom:1px solid #494c51}
+#materials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+.mat{padding:4px 3px;min-height:35px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center;font-size:10px;overflow:hidden}
+.swatch{width:16px;height:13px;flex-shrink:0;border:1px solid #ffffff55;image-rendering:pixelated}
+.control{margin-top:10px;border-top:1px solid #42454a;padding-top:8px}
+.control label{display:flex;justify-content:space-between;color:#dedfe1;margin-bottom:6px;font-size:11px}
+input[type=range]{width:100%;accent-color:#c7cbd0}
+.hint{display:none}
+#status{position:absolute;bottom:6px;left:6px;padding:5px 7px;background:#202226e8;border:1px solid #53565b;color:#e0e2e5;font-size:10px;pointer-events:none}
+#help{position:absolute;top:6px;left:6px;max-width:310px;background:#202226e0;border:1px solid #53565b;color:#d0d3d7;padding:5px 7px;font-size:10px;line-height:1.4;pointer-events:none}
+footer{background:#303237;border-top:1px solid #111;padding:5px 8px;color:#c0c3c8;font-size:10px;display:flex;justify-content:space-between;gap:10px;min-height:24px}
+@media(max-width:760px){header{align-items:flex-start;flex-direction:column}.brand{flex-wrap:wrap;gap:5px}.sub{display:none}aside{width:150px;padding:5px}#materials{grid-template-columns:repeat(2,minmax(0,1fr))}.mat{min-height:32px;padding:3px;font-size:9px}#help{display:none}button{padding:5px 6px;font-size:10px}}
+</style>
+</head>
+<body>
+<div id="wrap">
+<header>
+ <div class="brand"><h1>VOXEL PROJECT</h1><div class="sub">Particle sandbox · local simulation</div></div>
+ <div id="topButtons"><button id="pause">Ⅱ Pause</button><button id="step">Step</button><button id="clear">Clear</button><button id="walls">Walls: OFF</button><button id="openVideo">huh</button></div>
+</header>
+<nav id="menubar">
+ <div class="menuwrap"><button class="menutrigger" data-menu="fileMenu">File ▾</button><div class="dropdown" id="fileMenu">
+  <button data-action="new">New simulation</button><button data-action="save">Save simulation…</button><button data-action="load">Load simulation…</button><button data-action="export">Export image…</button>
+ </div></div>
+ <div class="menuwrap"><button class="menutrigger" data-menu="editMenu">Edit ▾</button><div class="dropdown" id="editMenu">
+  <button data-action="clear">Clear screen</button><button data-action="walls">Toggle boundary walls</button><button data-action="sand">Select Sand</button><button data-action="eraser">Select Eraser</button>
+ </div></div>
+ <div class="menuwrap"><button class="menutrigger" data-menu="displayMenu">Display ▾</button><div class="dropdown" id="displayMenu">
+  <button data-action="grid">Toggle pixel grid</button><button data-action="counts">Toggle particle counter</button><button data-action="helpOverlay">Toggle canvas help</button>
+ </div></div>
+ <div class="menuwrap"><button class="menutrigger" data-menu="simMenu">Simulation ▾</button><div class="dropdown" id="simMenu">
+  <button data-action="pause">Pause / resume</button><button data-action="step">Advance one step</button><button data-action="speedDown">Decrease speed</button><button data-action="speedUp">Increase speed</button><button data-action="speedReset">Reset speed to 1×</button>
+ </div></div>
+ <span id="speedReadout">SPEED: 1×</span>
+</nav>
+<input type="file" id="loadFile" accept=".json,application/json" hidden>
+<div id="videoOverlay" role="dialog" aria-modal="true" aria-label="Video player">
+ <div id="videoWindow"><div id="videoWindowHead"><strong>8-3 Disintegration Loop.mp4</strong><button id="closeVideo" type="button">Close ✕</button></div>
+ <video id="projectVideo" controls preload="metadata" src="8-3%20Disintegration%20Loop.mp4">Your browser does not support HTML video.</video>
+ <div id="videoError" style="display:none;color:#f0c5c5;padding:8px 2px">Could not load the video. Make sure <b>8-3 Disintegration Loop.mp4</b> is in the same folder as this HTML file.</div>
+ </div></div>
+<div id="workspace">
+<section id="stage">
+ <canvas id="c"></canvas>
+ <div id="help">Left-click and drag to draw · Right-click to erase<br>Choose an element from the panel on the right.</div>
+ <div id="status">Loading simulation…</div>
+</section>
+<aside>
+ <div class="section">Elements</div>
+ <div id="materials"></div>
+ <div class="control"><label for="brush">Brush size <b id="brushVal">5 px</b></label><input id="brush" type="range" min="1" max="18" value="5"></div>
+ <div class="control"><label for="speed">Simulation speed <b id="speedVal">1×</b></label><input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"><div style="font-size:10px;color:#b5b8bd;line-height:1.5">0.25× to 4× · adjustable</div></div>
+ <div class="control" style="display:flex;gap:4px;flex-wrap:wrap"><button id="selectSand" type="button">Select sand</button><button id="eraseHint" type="button">Eraser</button></div>
+</aside>
+</div>
+<footer><span>VOXEL PROJECT · sandbox mode</span><span>Hold left-click to draw · Right-click to erase · Speed adjustable</span></footer>
+</div>
+<script>
+(()=>{
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d',{alpha:false});
+const stage=document.getElementById('stage'),status=document.getElementById('status');
+const pauseBtn=document.getElementById('pause'),stepBtn=document.getElementById('step'),clearBtn=document.getElementById('clear'),wallBtn=document.getElementById('walls');
+const brush=document.getElementById('brush');
+const brushVal=document.getElementById('brushVal');
+const speed=document.getElementById('speed'),speedVal=document.getElementById('speedVal');
+const speedReadout=document.getElementById('speedReadout');
+const loadFile=document.getElementById('loadFile');
+const videoOverlay=document.getElementById('videoOverlay');
+const projectVideo=document.getElementById('projectVideo');
+const videoError=document.getElementById('videoError');
+document.getElementById('openVideo').addEventListener('click',()=>{
+ videoError.style.display='none';
+ videoOverlay.classList.add('show');
+ projectVideo.currentTime=0;
+ projectVideo.play().catch(()=>{});
+});
+function closeVideo(){
+ projectVideo.pause();
+ videoOverlay.classList.remove('show');
+}
+document.getElementById('closeVideo').addEventListener('click',closeVideo);
+videoOverlay.addEventListener('click',e=>{if(e.target===videoOverlay)closeVideo();});
+projectVideo.addEventListener('error',()=>{videoError.style.display='block';});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&videoOverlay.classList.contains('show'))closeVideo();});
+document.getElementById('selectSand').onclick=()=>select(SAND);
+document.getElementById('eraseHint').onclick=()=>select(ERASER);
+const EMPTY=0,SAND=1,WATER=2,WALL=3,STONE=4,WOOD=5,FIRE=6,SMOKE=7,OIL=8,ACID=9,STEAM=10,PLANT=11,ERASER=12,LAVA=13,ICE=14,METAL=15,SALT=16,CLONE=17,LIGHTNING=18,VOID=19,BACTERIA=20,GUNPOWDER=21,GLASS=22;
+const materials=[
+ {id:SAND,name:'Sand',color:'#e9c66a',desc:'Powder'},
+ {id:WATER,name:'Water',color:'#398ee8',desc:'Liquid'},
+ {id:WALL,name:'Wall',color:'#8793a8',desc:'Solid'},
+ {id:STONE,name:'Stone',color:'#666f80',desc:'Heavy'},
+ {id:WOOD,name:'Wood',color:'#9a613c',desc:'Flammable'},
+ {id:FIRE,name:'Fire',color:'#ff713d',desc:'Hot'},
+ {id:OIL,name:'Oil',color:'#b3a044',desc:'Flammable liquid'},
+ {id:ACID,name:'Acid',color:'#6be06c',desc:'Corrosive'},
+ {id:STEAM,name:'Steam',color:'#c8e5ed',desc:'Rises'},
+ {id:SMOKE,name:'Smoke',color:'#6b7483',desc:'Rises'},
+ {id:PLANT,name:'Plant',color:'#45a85d',desc:'Grows near water'},
+  {id:LAVA,name:'Lava',color:'#f45b2a',desc:'Hot molten rock'},
+ {id:ICE,name:'Ice',color:'#9ee7ff',desc:'Cold solid'},
+ {id:METAL,name:'Metal',color:'#9da8b9',desc:'Conductive solid'},
+ {id:SALT,name:'Salt',color:'#f2f2e8',desc:'Dissolves in water'},
+ {id:CLONE,name:'Clone',color:'#d66bff',desc:'Copies nearby matter'},
+ {id:LIGHTNING,name:'Spark',color:'#fff36a',desc:'Electric burst'},
+ {id:BACTERIA,name:'Bacteria',color:'#9ddc69',desc:'Spreads in liquids'},
+ {id:GUNPOWDER,name:'Powder',color:'#4c566b',desc:'Explosive'},
+ {id:GLASS,name:'Glass',color:'#8fd8e8',desc:'Solid barrier'},
+ {id:ERASER,name:'Eraser',color:'#252d3d',desc:'Remove pixels'}
+];
+let selected=SAND,paused=false,wallMode=false,showGrid=false,showCounts=true,showHelp=true,cols=0,rows=0,cell=4,grid,life,updated,frame=0,paintDown=false,eraseDown=false,lastCell=null,activePos=null,speedMultiplier=1,stepAccumulator=0;
+let imageData, pixels, palette={},counts={};
+for(const m of materials)palette[m.id]=m.color;
+const matEl=document.getElementById('materials');
+materials.forEach(m=>{const b=document.createElement('button');b.className='mat'+(m.id===selected?' active':'');b.dataset.id=m.id;b.innerHTML=`<span class="swatch" style="background:${m.color}"></span><span>${m.name}</span>`;b.title=m.desc;b.onclick=()=>select(m.id);matEl.appendChild(b)});
+function select(id){selected=id;document.querySelectorAll('.mat').forEach(b=>b.classList.toggle('active',+b.dataset.id===id));}
+function resize(){
+ const rect=stage.getBoundingClientRect();const old=grid,oc=cols,orr=rows;
+ cell=window.innerWidth<650?5:4;
+ cols=Math.max(40,Math.floor(rect.width/cell));rows=Math.max(35,Math.floor(rect.height/cell));
+ canvas.width=cols;canvas.height=rows;
+ grid=new Uint8Array(cols*rows);life=new Uint8Array(cols*rows);updated=new Uint8Array(cols*rows);
+ if(old){for(let y=0;y<Math.min(rows,orr);y++)for(let x=0;x<Math.min(cols,oc);x++){grid[y*cols+x]=old[y*oc+x];life[y*cols+x]=lifeOld[y*oc+x]||0;}}
+ imageData=ctx.createImageData(cols,rows);pixels=imageData.data;
+}
+let lifeOld;
+function resizeSafe(){lifeOld=life;resize();lifeOld=null;}
+window.addEventListener('resize',resizeSafe);
+function idx(x,y){return y*cols+x}
+function inBounds(x,y){return x>=0&&x<cols&&y>=0&&y<rows}
+function get(x,y){return inBounds(x,y)?grid[idx(x,y)]:WALL}
+function set(x,y,v,l=0){if(inBounds(x,y)){const i=idx(x,y);grid[i]=v;life[i]=l;}}
+function swap(i,j){let t=grid[i];grid[i]=grid[j];grid[j]=t;t=life[i];life[i]=life[j];life[j]=t;updated[i]=updated[j]=1;}
+function move(i,x,y){if(!inBounds(x,y)||grid[idx(x,y)]!==EMPTY)return false;const j=idx(x,y);grid[j]=grid[i];life[j]=life[i];grid[i]=EMPTY;life[i]=0;updated[j]=1;return true;}
+function paint(cx,cy,id){
+ const r=Math.max(1,Math.round(+brush.value/2)),r2=r*r;
+ for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++){
+  if(ox*ox+oy*oy>r2||Math.random()>.88)continue;
+  const x=cx+ox,y=cy+oy;if(!inBounds(x,y))continue;
+  if(id===ERASER){set(x,y,EMPTY);continue;}
+  if(id===EMPTY)continue;
+  const old=get(x,y);
+  if([WALL,STONE,WOOD,PLANT,ICE,METAL,GLASS,CLONE].includes(id)){set(x,y,id);continue;}
+  if(old===EMPTY||old===FIRE||old===SMOKE||old===STEAM)set(x,y,id,id===FIRE?rand(12,35):0);
+ }
+}
+function rand(a,b){return a+Math.floor(Math.random()*(b-a+1))}
+function coords(e){const r=canvas.getBoundingClientRect();return{x:Math.floor((e.clientX-r.left)/r.width*cols),y:Math.floor((e.clientY-r.top)/r.height*rows)}}
+canvas.addEventListener('pointerdown',e=>{if(e.button!==0&&e.button!==2)return;paintDown=true;eraseDown=e.button===2;canvas.setPointerCapture(e.pointerId);const p=coords(e);lastCell=p;activePos=p;paint(p.x,p.y,eraseDown?ERASER:selected);});
+canvas.addEventListener('pointermove',e=>{const p=coords(e);if(!paintDown)return;activePos=p;if(lastCell){const dx=p.x-lastCell.x,dy=p.y-lastCell.y,n=Math.max(Math.abs(dx),Math.abs(dy),1);for(let k=0;k<=n;k++){const x=Math.round(lastCell.x+dx*k/n),y=Math.round(lastCell.y+dy*k/n);paint(x,y,eraseDown?ERASER:selected);}}lastCell=p;});
+function release(){paintDown=false;lastCell=null;activePos=null}canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);window.addEventListener('pointerup',release);canvas.addEventListener('contextmenu',e=>e.preventDefault());
+brush.addEventListener('input',()=>brushVal.textContent=brush.value+' px');
+function setSpeed(v){speedMultiplier=Math.max(.25,Math.min(4,Math.round(v*4)/4));speed.value=String(speedMultiplier);speedVal.textContent=speedMultiplier+'×';speedReadout.textContent='SPEED: '+speedMultiplier+'×';}
+speed.addEventListener('input',()=>setSpeed(+speed.value));
+pauseBtn.onclick=()=>{paused=!paused;pauseBtn.textContent=paused?'▶ Resume':'Ⅱ Pause';};
+stepBtn.onclick=()=>{if(paused){simulate();draw();}};
+clearBtn.onclick=()=>{grid.fill(0);life.fill(0);updated.fill(0);};
+wallBtn.onclick=()=>{wallMode=!wallMode;wallBtn.textContent='Walls: '+(wallMode?'ON':'OFF');wallBtn.classList.toggle('active',wallMode);if(wallMode){for(let x=0;x<cols;x++){set(x,rows-1,WALL);set(x,0,WALL)}for(let y=0;y<rows;y++){set(0,y,WALL);set(cols-1,y,WALL)}}else{for(let x=0;x<cols;x++){if(get(x,rows-1)===WALL)set(x,rows-1,EMPTY);if(get(x,0)===WALL)set(x,0,EMPTY)}for(let y=0;y<rows;y++){if(get(0,y)===WALL)set(0,y,EMPTY);if(get(cols-1,y)===WALL)set(cols-1,y,EMPTY)}}};
+function toggleWalls(){wallBtn.click();}
+function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function saveSimulation(){downloadBlob(new Blob([JSON.stringify({format:'VoxelProject',version:1,cols,rows,grid:Array.from(grid),life:Array.from(life),wallMode,speedMultiplier})],{type:'application/json'}),'voxel-project-simulation.json');}
+function loadSimulation(data){
+ if(!data||data.format!=='VoxelProject'||!Array.isArray(data.grid)||!Number.isInteger(data.cols)||!Number.isInteger(data.rows))throw new Error('This is not a valid Voxel Project save.');
+ grid.fill(0);life.fill(0);
+ const maxY=Math.min(rows,data.rows),maxX=Math.min(cols,data.cols);
+ for(let y=0;y<maxY;y++)for(let x=0;x<maxX;x++){const src=y*data.cols+x,dst=y*cols+x;grid[dst]=Number(data.grid[src])||0;life[dst]=Number(data.life?.[src])||0;}
+ if(data.speedMultiplier)setSpeed(data.speedMultiplier);
+ wallMode=!!data.wallMode;wallBtn.textContent='Walls: '+(wallMode?'ON':'OFF');wallBtn.classList.toggle('active',wallMode);
+}
+document.querySelectorAll('.menutrigger').forEach(btn=>btn.addEventListener('click',e=>{
+ e.stopPropagation();const menu=document.getElementById(btn.dataset.menu),wasOpen=menu.classList.contains('show');
+ document.querySelectorAll('.dropdown').forEach(m=>m.classList.remove('show'));document.querySelectorAll('.menutrigger').forEach(b=>b.classList.remove('open'));
+ if(!wasOpen){menu.classList.add('show');btn.classList.add('open');}
+}));
+document.addEventListener('click',()=>{document.querySelectorAll('.dropdown').forEach(m=>m.classList.remove('show'));document.querySelectorAll('.menutrigger').forEach(b=>b.classList.remove('open'));});
+document.querySelectorAll('.dropdown button').forEach(btn=>btn.addEventListener('click',()=>{
+ const action=btn.dataset.action;
+ document.querySelectorAll('.dropdown').forEach(m=>m.classList.remove('show'));document.querySelectorAll('.menutrigger').forEach(b=>b.classList.remove('open'));
+ if(action==='new'||action==='clear'){if(action==='new'&&!confirm('Start a new simulation? The current scene will be cleared.'))return;grid.fill(0);life.fill(0);updated.fill(0);}
+ else if(action==='save')saveSimulation();
+ else if(action==='load')loadFile.click();
+ else if(action==='export'){const out=document.createElement('canvas');out.width=cols;out.height=rows;out.getContext('2d').putImageData(imageData,0,0);out.toBlob(blob=>{if(blob)downloadBlob(blob,'voxel-project.png');});}
+ else if(action==='walls')toggleWalls();
+ else if(action==='sand')select(SAND);
+ else if(action==='eraser')select(ERASER);
+ else if(action==='grid')showGrid=!showGrid;
+ else if(action==='counts')showCounts=!showCounts;
+ else if(action==='helpOverlay')showHelp=!showHelp;
+ else if(action==='pause')pauseBtn.click();
+ else if(action==='step'){if(paused){simulate();draw();}else{simulate();draw();}}
+ else if(action==='speedDown')setSpeed(speedMultiplier-.25);
+ else if(action==='speedUp')setSpeed(speedMultiplier+.25);
+ else if(action==='speedReset')setSpeed(1);
+ else if(action==='controls')alert('Controls:\\n• Hold left mouse button to place the selected element.\\n• Right-click and drag to erase.\\n• Use the brush slider to change brush size.\\n• Adjust simulation speed from 0.25× to 4×.\\n• File menu saves/loads JSON simulations and exports a PNG image.');
+ else if(action==='about')alert('Voxel Project\\nA standalone pixel-particle sandbox inspired by falling-sand games. It is a custom lightweight simulation, not the original Powder Toy engine.');
+}));
+loadFile.addEventListener('change',async()=>{
+ const file=loadFile.files?.[0];if(!file)return;
+ try{loadSimulation(JSON.parse(await file.text()));}
+ catch(err){alert('Could not load simulation: '+err.message);}
+ loadFile.value='';
+});
+
+function isLiquid(v){return v===WATER||v===OIL||v===ACID||v===LAVA}
+function isGas(v){return v===FIRE||v===SMOKE||v===STEAM}
+function burnAt(x,y){
+ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+  const xx=x+dx,yy=y+dy,v=get(xx,yy);
+  if(v===WOOD){if(Math.random()<.025)set(xx,yy,FIRE,rand(12,35));}
+  else if(v===OIL){if(Math.random()<.10)set(xx,yy,FIRE,rand(15,38));}
+  else if(v===PLANT||v===GUNPOWDER){if(Math.random()<(v===GUNPOWDER ? 0.25 : 0.035))set(xx,yy,FIRE,rand(10,25));}
+  else if(v===ICE){if(Math.random()<.06)set(xx,yy,WATER);}
+  else if(v===WATER){if(Math.random()<.03)set(xx,yy,STEAM,rand(8,20));}
+ }
+}
+function simulate(){
+ updated.fill(0);
+ const reverse=Math.random()<.5;
+ for(let yy=rows-1;yy>=0;yy--){
+  for(let k=0;k<cols;k++){
+   const x=reverse?cols-1-k:k,y=yy,i=idx(x,y),v=grid[i];
+   if(v===EMPTY||v===WALL||v===STONE||v===WOOD||v===PLANT||v===ICE||v===METAL||v===GLASS||updated[i])continue;
+   if(v===CLONE){
+    let copied=EMPTY;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const t=get(x+dx,y+dy);if(t!==EMPTY&&t!==CLONE&&t!==WALL)copied=t;}
+    if(copied!==EMPTY&&Math.random()<.02){set(x+rand(-1,1),y+rand(-1,1),copied);}
+   }else if(v===LIGHTNING){
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=x+dx,yy2=y+dy,t=get(xx,yy2);if(t===WATER&&Math.random()<.65)set(xx,yy2,FIRE,rand(5,12));if(t===WOOD&&Math.random()<.45)set(xx,yy2,FIRE,rand(10,20));}
+    set(x,y,EMPTY);
+   }else if(v===GUNPOWDER){
+    if(move(i,x,y+1))continue;
+    const d=Math.random()<.5?-1:1;if(get(x+d,y+1)===EMPTY&&move(i,x+d,y+1))continue;
+    if(Math.random()<.002){for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const xx=x+dx,yy2=y+dy;if(get(xx,yy2)===GUNPOWDER)set(xx,yy2,FIRE,rand(15,35));}set(x,y,FIRE,rand(15,35));}
+   }else if(v===SALT){
+    if(get(x,y+1)===WATER){set(x,y,EMPTY);continue;}
+    if(move(i,x,y+1))continue;
+    const d=Math.random()<.5?-1:1;if(get(x+d,y+1)===EMPTY)move(i,x+d,y+1);
+   }else if(v===BACTERIA){
+    if(isLiquid(get(x,y+1))&&Math.random()<.03){set(x,y,EMPTY);continue;}
+    if(Math.random()<.015){const dx=rand(-1,1),dy=rand(-1,1);if(get(x+dx,y+dy)===WATER)set(x+dx,y+dy,BACTERIA);}
+   }else if(v===SAND){
+    if(move(i,x,y+1))continue;
+    const dir=Math.random()<.5?-1:1;
+    if(get(x,y+1)===WATER||get(x,y+1)===OIL){const below=idx(x,y+1);if(grid[below]===WATER||grid[below]===OIL){if(Math.random()<.16){swap(i,below);continue;}}}
+    if(get(x+dir,y+1)===EMPTY&&move(i,x+dir,y+1))continue;
+    if(get(x-dir,y+1)===EMPTY&&move(i,x-dir,y+1))continue;
+   }else if(isLiquid(v)){
+    if(v===LAVA){burnAt(x,y);if(get(x,y+1)===WATER){set(x,y,STONE);set(x,y+1,STEAM,rand(8,20));continue;}if(Math.random()<.02){set(x,y,STONE);continue;}}
+    if(v===ACID){
+     let did=false;
+     for(const [dx,dy] of [[0,1],[1,0],[-1,0],[0,-1]]){
+      const xx=x+dx,yy2=y+dy,t=get(xx,yy2);
+      if([WALL,STONE,WOOD,PLANT].includes(t)&&Math.random()<.04){set(xx,yy2,EMPTY);if(Math.random()<.4)set(x,y,EMPTY);did=true;break;}
+     }if(did)continue;
+    }
+    if(move(i,x,y+1))continue;
+    const dir=Math.random()<.5?-1:1;
+    if(get(x+dir,y+1)===EMPTY&&Math.random()<.8&&move(i,x+dir,y+1))continue;
+    if(get(x-dir,y+1)===EMPTY&&move(i,x-dir,y+1))continue;
+    const spread=v===WATER?rand(1,4):rand(1,2);
+    let moved=false;
+    for(let s=1;s<=spread;s++){const d=Math.random()<.5?-s:s;if(get(x+d,y)===EMPTY&&move(i,x+d,y)){moved=true;break;}}
+    if(moved)continue;
+    // Water and oil separate somewhat; acid colors remain reactive.
+   }else if(isGas(v)){
+    if(v===FIRE){
+     burnAt(x,y);life[i]--;
+     if(life[i]===0||Math.random()<.04){set(x,y,Math.random()<.65?SMOKE:EMPTY,rand(12,30));continue;}
+     if(get(x,y-1)===EMPTY&&Math.random()<.72){move(i,x,y-1);continue;}
+     const d=Math.random()<.5?-1:1;if(get(x+d,y-1)===EMPTY&&move(i,x+d,y-1))continue;
+    }else{
+     life[i]--;if(life[i]===0){set(x,y,EMPTY);continue;}
+     if(get(x,y-1)===EMPTY&&move(i,x,y-1))continue;
+     const d=Math.random()<.5?-1:1;if(get(x+d,y-1)===EMPTY&&move(i,x+d,y-1))continue;
+     if(get(x-d,y-1)===EMPTY&&move(i,x-d,y-1))continue;
+     if(Math.random()<.003)set(x,y,EMPTY);
+    }
+   }
+  }
+ }
+ // Plants grow into adjacent empty cells when water is nearby.
+ if(frame%5===0){
+  for(let y=rows-2;y>1;y--)for(let x=1;x<cols-1;x++)if(get(x,y)===PLANT&&Math.random()<.012){
+   let wet=false;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)if(get(x+dx,y+dy)===WATER)wet=true;
+   if(wet){const d=Math.random()<.5?-1:1;if(get(x,y-1)===EMPTY)set(x,y-1,PLANT);else if(get(x+d,y)===EMPTY)set(x+d,y,PLANT);}
+  }
+ }
+ frame++;
+}
+function hex(hex){const n=parseInt(hex.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255]}
+const rgb={};for(const m of materials)rgb[m.id]=hex(m.color);
+function draw(){
+ const counts={};
+ for(let i=0;i<grid.length;i++){
+  const v=grid[i],p=i*4;
+  if(v===EMPTY){pixels[p]=12;pixels[p+1]=17;pixels[p+2]=27;pixels[p+3]=255;continue;}
+  counts[v]=(counts[v]||0)+1;
+  let c=rgb[v]||[255,255,255];
+  if(v===SAND){const n=(i*17+frame*3)%24;c=[235,198+n,101+n%8];}
+  if(v===WATER){const n=(i*13+frame*5)%25;c=[35+n,115+n,210+n];}
+  if(v===FIRE){const n=(i*7+frame*11)%80;c=n<40?[255,75+n,35]:[255,170+n,45];}
+  if(v===SMOKE){const n=(i*5+frame)%25;c=[75+n,83+n,98+n];}
+  if(v===STEAM){const n=(i*3+frame)%25;c=[170+n,205+n,218+n];}
+  if(v===ACID){const n=(i*9+frame)%28;c=[72+n,205+n,70+n];}
+  if(v===LAVA){const n=(i*7+frame*3)%50;c=[245,55+n,18];}
+  if(v===LIGHTNING)c=[255,248,115];
+  if(v===BACTERIA){const n=(i*11+frame)%25;c=[105+n,190+n,65+n%10];}
+  if(v===GLASS)c=[105,190,205];
+  if(v===ICE)c=[135,215,245];
+  if(v===METAL)c=[150,163,183];
+  if(v===SALT)c=[235,236,222];
+  if(v===GUNPOWDER)c=[66,76,95];
+  if(v===CLONE)c=[204,100,246];
+  pixels[p]=c[0];pixels[p+1]=c[1];pixels[p+2]=c[2];pixels[p+3]=255;
+ }
+ ctx.putImageData(imageData,0,0);
+ if(showGrid&&cols<450){ctx.strokeStyle='rgba(255,255,255,.10)';ctx.lineWidth=1;ctx.beginPath();for(let x=0;x<cols;x+=8){ctx.moveTo(x,0);ctx.lineTo(x,rows)}for(let y=0;y<rows;y+=8){ctx.moveTo(0,y);ctx.lineTo(cols,y)}ctx.stroke();}
+ status.style.display=showCounts?'block':'none';
+ if(showCounts)status.textContent=`${paused?'PAUSED':'RUNNING'} · ${Object.values(counts).reduce((a,b)=>a+b,0).toLocaleString()} particles · ${cols}×${rows} · ${speedMultiplier}×`;
+ document.getElementById('help').style.display=showHelp?'block':'none';
+}
+function loop(){
+ if(paintDown&&activePos)paint(activePos.x,activePos.y,eraseDown?ERASER:selected);
+ if(!paused){stepAccumulator+=speedMultiplier;let safety=0;while(stepAccumulator>=1&&safety<8){simulate();stepAccumulator-=1;safety++;}}
+ draw();requestAnimationFrame(loop);
+}
+// Every launch starts with a completely empty simulation.
+resizeSafe();
+grid.fill(EMPTY);
+life.fill(0);
+updated.fill(0);
+wallMode = false;
+wallBtn.textContent = 'Walls: OFF';
+wallBtn.classList.remove('active');
+loop();
+})();
+</script>
+</body>
+</html>
