@@ -42,6 +42,14 @@ aside{width:238px;flex-shrink:0;background:#292b2f;border-left:1px solid #4a4d52
 .control label{display:flex;justify-content:space-between;color:#dedfe1;margin-bottom:6px;font-size:11px}
 input[type=range]{width:100%;accent-color:#c7cbd0}
 .hint{display:none}
+#ov{position:absolute;inset:0;pointer-events:none;cursor:default;image-rendering:auto}
+#tabs{display:flex;gap:2px;margin:0 0 8px}
+.tab{flex:1;padding:6px 4px;font-size:11px;box-shadow:none;background:#303338}
+.tab.active{background:#50565e;border-color:#c9cdd2;color:#fff}
+#elecMaterials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+.control label.chk{justify-content:flex-start;align-items:center;gap:6px;cursor:pointer}
+.control select{background:#383b40;color:var(--text);border:1px solid #111;padding:3px 4px;font:inherit}
+.control input[type=checkbox]{accent-color:#c7cbd0;margin:0}
 #status{position:absolute;bottom:6px;left:6px;padding:5px 7px;background:#202226e8;border:1px solid #53565b;color:#e0e2e5;font-size:10px;pointer-events:none}
 #help{position:absolute;top:6px;left:6px;max-width:310px;background:#202226e0;border:1px solid #53565b;color:#d0d3d7;padding:5px 7px;font-size:10px;line-height:1.4;pointer-events:none}
 footer{background:#303237;border-top:1px solid #111;padding:5px 8px;color:#c0c3c8;font-size:10px;display:flex;justify-content:space-between;gap:10px;min-height:24px}
@@ -78,12 +86,23 @@ footer{background:#303237;border-top:1px solid #111;padding:5px 8px;color:#c0c3c
 <div id="workspace">
 <section id="stage">
  <canvas id="c"></canvas>
+ <canvas id="ov"></canvas>
  <div id="help">This may not be compatible with mobile devices!<br>If this does not work for you then I'll find a way to fix it.</div>
  <div id="status">Loading simulation…</div>
 </section>
 <aside>
- <div class="section">Elements</div>
+ <div id="tabs"><button class="tab active" type="button" data-tab="elements">Elements</button><button class="tab" type="button" data-tab="electronics">Electronics</button></div>
+ <div id="tab-elements">
  <div id="materials"></div>
+ <div class="control" id="physicsPanel">
+  <div class="section">Solid physics</div>
+  <label class="chk"><input type="checkbox" id="solidGravity"> Gravity on locked solids</label>
+  <label>Mode <select id="gravMode"><option value="rigid">Rigid chunks</option><option value="loose">Loose blocks</option></select></label>
+  <label class="chk"><input type="checkbox" id="anchorWalls" checked> Walls stay anchored</label>
+  <label class="chk"><input type="checkbox" id="tipOver" checked> Tip over when lopsided</label>
+ </div>
+ </div>
+ <div id="tab-electronics" style="display:none"><div id="elecMaterials"></div></div>
  <div class="control"><label for="brush">Brush size <b id="brushVal">5 px</b></label><input id="brush" type="range" min="1" max="18" value="5"></div>
  <div class="control"><label for="speed">Simulation speed <b id="speedVal">1×</b></label><input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"><div style="font-size:10px;color:#b5b8bd;line-height:1.5">0.25× to 4× · adjustable</div></div>
  <div class="control" style="display:flex;gap:4px;flex-wrap:wrap"><button id="selectSand" type="button">Select sand</button><button id="eraseHint" type="button">Eraser</button></div>
@@ -120,7 +139,7 @@ projectVideo.addEventListener('error',()=>{videoError.style.display='block';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&videoOverlay.classList.contains('show'))closeVideo();});
 document.getElementById('selectSand').onclick=()=>select(SAND);
 document.getElementById('eraseHint').onclick=()=>select(ERASER);
-const EMPTY=0,SAND=1,WATER=2,WALL=3,STONE=4,WOOD=5,FIRE=6,SMOKE=7,OIL=8,ACID=9,STEAM=10,PLANT=11,ERASER=12,LAVA=13,ICE=14,METAL=15,SALT=16,CLONE=17,LIGHTNING=18,VOID=19,BACTERIA=20,GUNPOWDER=21,GLASS=22;
+const EMPTY=0,SAND=1,WATER=2,WALL=3,STONE=4,WOOD=5,FIRE=6,SMOKE=7,OIL=8,ACID=9,STEAM=10,PLANT=11,ERASER=12,LAVA=13,ICE=14,METAL=15,SALT=16,CLONE=17,LIGHTNING=18,VOID=19,BACTERIA=20,GUNPOWDER=21,GLASS=22,BLUEFIRE=23,SNOW=24,DIRT=25,MUD=26,ASH=27,RUST=28,CEMENT=29,THERMITE=30,NITRO=31,TNT=32,GAS=33,MERCURY=34,CRYO=35,SLIME=36,GOLD=37,EMBER=38,MOLD=39,SPONGE=40,FUSE=41,SEED=42,CONFETTI=43,TUNGSTEN=44,TITANIUM=45,WIRE=46,BATTERY=47,SWITCH=48,BUTTON=49,CLOCK=50,AND=51,OR=52,NOT=53,NAND=54,NOR=55,XOR=56,XNOR=57,BUFFER=58,CROSS=59,LAMP=60,LEDR=61,LEDG=62,LEDB=63,HEATER=64,IGNITER=65,BUZZER=66,WSENSOR=67,TSENSOR=68,PLATE=69,LSENSOR=70,POKE=100;
 const materials=[
  {id:SAND,name:'Sand',color:'#e9c66a',desc:'Powder'},
  {id:WATER,name:'Water',color:'#398ee8',desc:'Liquid'},
@@ -135,20 +154,79 @@ const materials=[
  {id:PLANT,name:'Plant',color:'#45a85d',desc:'Grows near water'},
   {id:LAVA,name:'Lava',color:'#f45b2a',desc:'Hot molten rock'},
  {id:ICE,name:'Ice',color:'#9ee7ff',desc:'Cold solid'},
- {id:METAL,name:'Metal',color:'#9da8b9',desc:'Conductive solid'},
+ {id:METAL,name:'Metal',color:'#9da8b9',desc:'Conducts heat, glows red'},
  {id:SALT,name:'Salt',color:'#f2f2e8',desc:'Dissolves in water'},
  {id:CLONE,name:'Clone',color:'#d66bff',desc:'Copies nearby matter'},
  {id:LIGHTNING,name:'Spark',color:'#fff36a',desc:'Electric burst'},
  {id:BACTERIA,name:'Bacteria',color:'#9ddc69',desc:'Spreads in liquids'},
  {id:GUNPOWDER,name:'Powder',color:'#4c566b',desc:'Explosive'},
  {id:GLASS,name:'Glass',color:'#8fd8e8',desc:'Solid barrier'},
- {id:ERASER,name:'Eraser',color:'#252d3d',desc:'Remove pixels'}
+ {id:BLUEFIRE,name:'Blue Fire',color:'#4aa8ff',desc:'Much hotter fire'},
+ {id:SNOW,name:'Snow',color:'#f4f8ff',desc:'Melts when warm'},
+ {id:DIRT,name:'Dirt',color:'#6b4a2f',desc:'Turns to mud in water'},
+ {id:MUD,name:'Mud',color:'#4e3a28',desc:'Thick, dries to dirt'},
+ {id:ASH,name:'Ash',color:'#9a9a9a',desc:'Burnt remains'},
+ {id:RUST,name:'Rust',color:'#b5532a',desc:'Metal + water'},
+ {id:CEMENT,name:'Cement',color:'#b4b09f',desc:'Hardens in water'},
+ {id:THERMITE,name:'Thermite',color:'#8c3b3b',desc:'Burns insanely hot'},
+ {id:NITRO,name:'Nitro',color:'#b6ff3a',desc:'Unstable explosive liquid'},
+ {id:TNT,name:'TNT',color:'#d23b3b',desc:'Big explosion'},
+ {id:GAS,name:'Gas',color:'#b9a6d9',desc:'Flammable gas'},
+ {id:MERCURY,name:'Mercury',color:'#cfd5de',desc:'Very heavy liquid'},
+ {id:CRYO,name:'Cryo',color:'#38d6ff',desc:'Freezes water'},
+ {id:SLIME,name:'Slime',color:'#e84fb0',desc:'Very thick liquid'},
+ {id:GOLD,name:'Gold',color:'#f2c230',desc:'Acid-proof solid'},
+ {id:EMBER,name:'Ember',color:'#e05a1a',desc:'Glowing coals'},
+ {id:MOLD,name:'Mold',color:'#3f7f77',desc:'Grows on organic matter'},
+ {id:SPONGE,name:'Sponge',color:'#f2dc5d',desc:'Soaks up liquid'},
+ {id:FUSE,name:'Fuse',color:'#8a7a4f',desc:'Burns slowly'},
+ {id:SEED,name:'Seed',color:'#b6d36a',desc:'Grows on wet dirt'},
+ {id:CONFETTI,name:'Confetti',color:'#ff5fa2',desc:'Party powder'},
+ {id:TUNGSTEN,name:'Tungsten',color:'#5a606c',desc:'Never melts, glows red'},
+ {id:TITANIUM,name:'Titanium',color:'#b4bccb',desc:'Heat-proof, glows red'},
+ {id:WIRE,name:'Wire',color:'#c8743a',desc:'Carries electricity',elec:true},
+ {id:BATTERY,name:'Battery',color:'#3aa655',desc:'Always-on power source',elec:true},
+ {id:SWITCH,name:'Switch',color:'#c0463f',desc:'Poke to flip on/off',elec:true},
+ {id:BUTTON,name:'Button',color:'#d9534f',desc:'On while you hold Poke on it',elec:true},
+ {id:CLOCK,name:'Clock',color:'#9a5cf0',desc:'Pulses on and off. Poke changes speed.',elec:true},
+ {id:AND,name:'AND',color:'#466ed7',desc:'AND gate. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:OR,name:'OR',color:'#3caacd',desc:'OR gate. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:NOT,name:'NOT',color:'#dc7832',desc:'NOT gate. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:NAND,name:'NAND',color:'#6e46c8',desc:'NAND gate. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:NOR,name:'NOR',color:'#c84696',desc:'NOR gate. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:XOR,name:'XOR',color:'#d2b43c',desc:'XOR gate. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:XNOR,name:'XNOR',color:'#a0c846',desc:'XNOR gate. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:BUFFER,name:'Delay',color:'#969baa',desc:'Repeats its input one tick later. Output goes where the arrow points, other sides are inputs. Poke rotates it.',elec:true},
+ {id:CROSS,name:'Crossover',color:'#7a6658',desc:'Lets two wires cross without touching',elec:true},
+ {id:LAMP,name:'Lamp',color:'#ffe9a0',desc:'Lights up when powered',elec:true},
+ {id:LEDR,name:'Red LED',color:'#ff4646',desc:'Lights up when powered',elec:true},
+ {id:LEDG,name:'Green LED',color:'#50ff6e',desc:'Lights up when powered',elec:true},
+ {id:LEDB,name:'Blue LED',color:'#5a96ff',desc:'Lights up when powered',elec:true},
+ {id:HEATER,name:'Heater',color:'#e0602a',desc:'Heats and ignites neighbours when powered',elec:true},
+ {id:IGNITER,name:'Igniter',color:'#ffd84a',desc:'Throws sparks when powered',elec:true},
+ {id:BUZZER,name:'Buzzer',color:'#c8c8e0',desc:'Beeps when powered',elec:true},
+ {id:WSENSOR,name:'Water Sensor',color:'#5aa0e0',desc:'Powers wires next to it when it touches water',elec:true},
+ {id:TSENSOR,name:'Heat Sensor',color:'#d9703a',desc:'Powers wires next to it when it touches fire, lava or hot metal',elec:true},
+ {id:PLATE,name:'Pressure Plate',color:'#b3a878',desc:'Powered while something sits on top of it',elec:true},
+ {id:LSENSOR,name:'Light Sensor',color:'#e6e65a',desc:'Powered when a lamp or LED is lit nearby',elec:true},
+ {id:POKE,name:'Poke',color:'#ffd24a',desc:'Click to flip switches, press buttons, rotate gates and change clock speed',elec:true},
+ {id:ERASER,name:'Eraser',color:'#252d3d',desc:'Remove pixels',both:true}
 ];
-let selected=SAND,paused=false,wallMode=false,showGrid=false,showCounts=true,showHelp=true,cols=0,rows=0,cell=4,grid,life,updated,frame=0,paintDown=false,eraseDown=false,lastCell=null,activePos=null,speedMultiplier=1,stepAccumulator=0;
+let selected=SAND,paused=false,wallMode=false,showGrid=false,showCounts=true,showHelp=true,cols=0,rows=0,cell=4,grid,life,updated,frame=0,paintDown=false,eraseDown=false,lastCell=null,activePos=null,speedMultiplier=1,stepAccumulator=0,blasts=[];
 let imageData, pixels, palette={},counts={};
 for(const m of materials)palette[m.id]=m.color;
-const matEl=document.getElementById('materials');
-materials.forEach(m=>{const b=document.createElement('button');b.className='mat'+(m.id===selected?' active':'');b.dataset.id=m.id;b.innerHTML=`<span class="swatch" style="background:${m.color}"></span><span>${m.name}</span>`;b.title=m.desc;b.onclick=()=>select(m.id);matEl.appendChild(b)});
+const matEl=document.getElementById('materials'),elecEl=document.getElementById('elecMaterials');
+materials.forEach(m=>{for(const tg of (m.elec?[elecEl]:m.both?[matEl,elecEl]:[matEl])){const b=document.createElement('button');b.className='mat'+(m.id===selected?' active':'');b.dataset.id=m.id;b.innerHTML=`<span class="swatch" style="background:${m.color}"></span><span>${m.name}</span>`;b.title=m.desc;b.onclick=()=>select(m.id);tg.appendChild(b)}});
+let savedBrush=5;
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+ if(t.classList.contains('active'))return;
+ const which=t.dataset.tab;
+ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+ document.getElementById('tab-elements').style.display=which==='elements'?'':'none';
+ document.getElementById('tab-electronics').style.display=which==='electronics'?'':'none';
+ if(which==='electronics'){savedBrush=+brush.value;brush.value=1;brushVal.textContent='1 px';select(WIRE);}
+ else{brush.value=savedBrush;brushVal.textContent=savedBrush+' px';select(SAND);}
+}));
 function select(id){selected=id;document.querySelectorAll('.mat').forEach(b=>b.classList.toggle('active',+b.dataset.id===id));}
 function resize(){
  const rect=stage.getBoundingClientRect();const old=grid,oc=cols,orr=rows;
@@ -169,20 +247,22 @@ function set(x,y,v,l=0){if(inBounds(x,y)){const i=idx(x,y);grid[i]=v;life[i]=l;}
 function swap(i,j){let t=grid[i];grid[i]=grid[j];grid[j]=t;t=life[i];life[i]=life[j];life[j]=t;updated[i]=updated[j]=1;}
 function move(i,x,y){if(!inBounds(x,y)||grid[idx(x,y)]!==EMPTY)return false;const j=idx(x,y);grid[j]=grid[i];life[j]=life[i];grid[i]=EMPTY;life[i]=0;updated[j]=1;return true;}
 function paint(cx,cy,id){
- const r=Math.max(1,Math.round(+brush.value/2)),r2=r*r;
+ if(id===POKE)return;
+ const el=ELEC[id]===1,r=el?Math.floor(+brush.value/2):Math.max(1,Math.round(+brush.value/2)),r2=r*r;
  for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++){
-  if(ox*ox+oy*oy>r2||Math.random()>.88)continue;
+  if(ox*ox+oy*oy>r2||(!el&&Math.random()>.88))continue;
   const x=cx+ox,y=cy+oy;if(!inBounds(x,y))continue;
   if(id===ERASER){set(x,y,EMPTY);continue;}
   if(id===EMPTY)continue;
   const old=get(x,y);
-  if([WALL,STONE,WOOD,PLANT,ICE,METAL,GLASS,CLONE].includes(id)){set(x,y,id);continue;}
-  if(old===EMPTY||old===FIRE||old===SMOKE||old===STEAM)set(x,y,id,id===FIRE?rand(12,35):0);
+  if(el){ensureEl();set(x,y,id);elAux[idx(x,y)]=0;continue;}
+  if([WALL,STONE,WOOD,PLANT,ICE,METAL,GLASS,CLONE,TNT,GOLD,SPONGE,FUSE,TUNGSTEN,TITANIUM].includes(id)){set(x,y,id);continue;}
+  if(old===EMPTY||old===FIRE||old===BLUEFIRE||old===SMOKE||old===STEAM)set(x,y,id,startLife(id));
  }
 }
 function rand(a,b){return a+Math.floor(Math.random()*(b-a+1))}
 function coords(e){const r=canvas.getBoundingClientRect();return{x:Math.floor((e.clientX-r.left)/r.width*cols),y:Math.floor((e.clientY-r.top)/r.height*rows)}}
-canvas.addEventListener('pointerdown',e=>{if(e.button!==0&&e.button!==2)return;paintDown=true;eraseDown=e.button===2;canvas.setPointerCapture(e.pointerId);const p=coords(e);lastCell=p;activePos=p;paint(p.x,p.y,eraseDown?ERASER:selected);});
+canvas.addEventListener('pointerdown',e=>{if(e.button!==0&&e.button!==2)return;paintDown=true;eraseDown=e.button===2;canvas.setPointerCapture(e.pointerId);const p=coords(e);lastCell=p;activePos=p;if(!eraseDown&&selected===POKE)pokeAt(p.x,p.y);paint(p.x,p.y,eraseDown?ERASER:selected);});
 canvas.addEventListener('pointermove',e=>{const p=coords(e);if(!paintDown)return;activePos=p;if(lastCell){const dx=p.x-lastCell.x,dy=p.y-lastCell.y,n=Math.max(Math.abs(dx),Math.abs(dy),1);for(let k=0;k<=n;k++){const x=Math.round(lastCell.x+dx*k/n),y=Math.round(lastCell.y+dy*k/n);paint(x,y,eraseDown?ERASER:selected);}}lastCell=p;});
 function release(){paintDown=false;lastCell=null;activePos=null}canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);window.addEventListener('pointerup',release);canvas.addEventListener('contextmenu',e=>e.preventDefault());
 brush.addEventListener('input',()=>brushVal.textContent=brush.value+' px');
@@ -190,16 +270,16 @@ function setSpeed(v){speedMultiplier=Math.max(.25,Math.min(4,Math.round(v*4)/4))
 speed.addEventListener('input',()=>setSpeed(+speed.value));
 pauseBtn.onclick=()=>{paused=!paused;pauseBtn.textContent=paused?'▶ Resume':'Ⅱ Pause';};
 stepBtn.onclick=()=>{if(paused){simulate();draw();}};
-clearBtn.onclick=()=>{grid.fill(0);life.fill(0);updated.fill(0);};
+clearBtn.onclick=()=>{grid.fill(0);life.fill(0);updated.fill(0);blasts=[];resetTip();};
 wallBtn.onclick=()=>{wallMode=!wallMode;wallBtn.textContent='Walls: '+(wallMode?'ON':'OFF');wallBtn.classList.toggle('active',wallMode);if(wallMode){for(let x=0;x<cols;x++){set(x,rows-1,WALL);set(x,0,WALL)}for(let y=0;y<rows;y++){set(0,y,WALL);set(cols-1,y,WALL)}}else{for(let x=0;x<cols;x++){if(get(x,rows-1)===WALL)set(x,rows-1,EMPTY);if(get(x,0)===WALL)set(x,0,EMPTY)}for(let y=0;y<rows;y++){if(get(0,y)===WALL)set(0,y,EMPTY);if(get(cols-1,y)===WALL)set(cols-1,y,EMPTY)}}};
 function toggleWalls(){wallBtn.click();}
 function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function saveSimulation(){downloadBlob(new Blob([JSON.stringify({format:'VoxelProject',version:1,cols,rows,grid:Array.from(grid),life:Array.from(life),wallMode,speedMultiplier})],{type:'application/json'}),'voxel-project-simulation.json');}
+function saveSimulation(){downloadBlob(new Blob([JSON.stringify({format:'VoxelProject',version:1,cols,rows,grid:Array.from(grid),life:Array.from(life),aux:Array.from((ensureEl(),elAux)),wallMode,speedMultiplier})],{type:'application/json'}),'voxel-project-simulation.json');}
 function loadSimulation(data){
  if(!data||data.format!=='VoxelProject'||!Array.isArray(data.grid)||!Number.isInteger(data.cols)||!Number.isInteger(data.rows))throw new Error('This is not a valid Voxel Project save.');
- grid.fill(0);life.fill(0);
+ grid.fill(0);life.fill(0);blasts=[];resetTip();ensureEl();elAux.fill(0);
  const maxY=Math.min(rows,data.rows),maxX=Math.min(cols,data.cols);
- for(let y=0;y<maxY;y++)for(let x=0;x<maxX;x++){const src=y*data.cols+x,dst=y*cols+x;grid[dst]=Number(data.grid[src])||0;life[dst]=Number(data.life?.[src])||0;}
+ for(let y=0;y<maxY;y++)for(let x=0;x<maxX;x++){const src=y*data.cols+x,dst=y*cols+x;grid[dst]=Number(data.grid[src])||0;life[dst]=Number(data.life?.[src])||0;if(data.aux)elAux[dst]=Number(data.aux[src])||0;}
  if(data.speedMultiplier)setSpeed(data.speedMultiplier);
  wallMode=!!data.wallMode;wallBtn.textContent='Walls: '+(wallMode?'ON':'OFF');wallBtn.classList.toggle('active',wallMode);
 }
@@ -212,7 +292,7 @@ document.addEventListener('click',()=>{document.querySelectorAll('.dropdown').fo
 document.querySelectorAll('.dropdown button').forEach(btn=>btn.addEventListener('click',()=>{
  const action=btn.dataset.action;
  document.querySelectorAll('.dropdown').forEach(m=>m.classList.remove('show'));document.querySelectorAll('.menutrigger').forEach(b=>b.classList.remove('open'));
- if(action==='new'||action==='clear'){if(action==='new'&&!confirm('Start a new simulation? The current scene will be cleared.'))return;grid.fill(0);life.fill(0);updated.fill(0);}
+ if(action==='new'||action==='clear'){if(action==='new'&&!confirm('Start a new simulation? The current scene will be cleared.'))return;grid.fill(0);life.fill(0);updated.fill(0);blasts=[];resetTip();}
  else if(action==='save')saveSimulation();
  else if(action==='load')loadFile.click();
  else if(action==='export'){const out=document.createElement('canvas');out.width=cols;out.height=rows;out.getContext('2d').putImageData(imageData,0,0);out.toBlob(blob=>{if(blob)downloadBlob(blob,'voxel-project.png');});}
@@ -237,74 +317,650 @@ loadFile.addEventListener('change',async()=>{
  loadFile.value='';
 });
 
-function isLiquid(v){return v===WATER||v===OIL||v===ACID||v===LAVA}
-function isGas(v){return v===FIRE||v===SMOKE||v===STEAM}
-function burnAt(x,y){
+const N4=[[0,1],[1,0],[-1,0],[0,-1]];
+const BOIL_HEAT=100;
+const HM=new Uint8Array(128);[METAL,TUNGSTEN,TITANIUM].forEach(v=>HM[v]=1);
+const LD=[],PD=[],VISC=[],STATIC=new Uint8Array(128);
+LD[WATER]=1;LD[OIL]=.8;LD[ACID]=1.1;LD[LAVA]=3;LD[NITRO]=1.4;LD[MERCURY]=9;LD[CRYO]=.95;LD[MUD]=2.2;LD[SLIME]=1.3;
+VISC[MUD]=.18;VISC[SLIME]=.1;
+PD[SAND]=2;PD[DIRT]=2;PD[CEMENT]=2;PD[RUST]=2.1;PD[THERMITE]=2.2;PD[ASH]=.95;PD[SNOW]=.5;PD[SEED]=.9;PD[CONFETTI]=.6;PD[EMBER]=.9;
+[EMPTY,WALL,STONE,WOOD,PLANT,ICE,METAL,GLASS,TNT,GOLD,TUNGSTEN,TITANIUM].forEach(v=>STATIC[v]=1);
+const CONF=[[255,79,134],[255,210,63],[62,199,255],[125,255,107],[181,107,255],[255,138,61]];
+function isLiquid(v){return LD[v]!==undefined}
+function isGas(v){return v===FIRE||v===BLUEFIRE||v===SMOKE||v===STEAM||v===GAS}
+function startLife(id){return id===FIRE?rand(12,35):id===BLUEFIRE?rand(30,70):id===EMBER?rand(90,180):0}
+function queueBlast(x,y,r,d){if(blasts.length<600)blasts.push({x,y,r,d})}
+function lightTNT(x,y){set(x,y,FIRE,rand(10,18));queueBlast(x,y,10,rand(10,24));}
+function detonateNitro(x,y){set(x,y,FIRE,rand(4,9));queueBlast(x,y,3,rand(0,3));}
+function igniteGunpowder(x,y){
+ for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const xx=x+dx,yy=y+dy;if(get(xx,yy)===GUNPOWDER)set(xx,yy,FIRE,rand(15,35));}
+ set(x,y,FIRE,rand(15,35));
+}
+function explode(cx,cy,r){
+ const r2=r*r;
+ for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+  const d2=dx*dx+dy*dy;if(d2>r2)continue;
+  const x=cx+dx,y=cy+dy;if(!inBounds(x,y))continue;
+  const t=grid[idx(x,y)];
+  if(t===WALL||t===METAL||t===GOLD||t===TUNGSTEN||t===TITANIUM)continue;
+  if(t===TNT){lightTNT(x,y);continue;}
+  if(t===NITRO){detonateNitro(x,y);continue;}
+  if(d2>r2*.55&&Math.random()<.45)continue;
+  const q=Math.random();
+  if(q<.5)set(x,y,FIRE,rand(8,24));else if(q<.72)set(x,y,SMOKE,rand(20,60));else set(x,y,EMPTY);
+ }
+}
+function burnAt(x,y,hot){
  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
-  const xx=x+dx,yy=y+dy,v=get(xx,yy);
-  if(v===WOOD){if(Math.random()<.025)set(xx,yy,FIRE,rand(12,35));}
-  else if(v===OIL){if(Math.random()<.10)set(xx,yy,FIRE,rand(15,38));}
-  else if(v===PLANT||v===GUNPOWDER){if(Math.random()<(v===GUNPOWDER ? 0.25 : 0.035))set(xx,yy,FIRE,rand(10,25));}
-  else if(v===ICE){if(Math.random()<.06)set(xx,yy,WATER);}
-  else if(v===WATER){if(Math.random()<.03)set(xx,yy,STEAM,rand(8,20));}
+  const xx=x+dx,yy=y+dy;if(!inBounds(xx,yy))continue;
+  const j=idx(xx,yy),v=grid[j];if(v===EMPTY)continue;
+  const r=Math.random();
+  switch(v){
+   case WOOD:if(r<(hot?.08:.025))set(xx,yy,FIRE,rand(12,35));break;
+   case OIL:if(r<(hot?.4:.10))set(xx,yy,FIRE,rand(15,38));break;
+   case PLANT:if(r<(hot?.12:.035))set(xx,yy,FIRE,rand(10,25));break;
+   case SEED:if(r<(hot?.2:.06))set(xx,yy,FIRE,rand(6,14));break;
+   case GUNPOWDER:if(r<(hot?.7:.25))igniteGunpowder(xx,yy);break;
+   case THERMITE:if(r<(hot?.5:.02))set(xx,yy,Math.random()<.12?LAVA:BLUEFIRE,rand(28,55));break;
+   case GAS:if(r<(hot?.8:.45)){set(xx,yy,FIRE,rand(5,10));if(Math.random()<.08)queueBlast(xx,yy,2,rand(1,3));}break;
+   case NITRO:if(r<(hot?.6:.25))detonateNitro(xx,yy);break;
+   case TNT:if(r<(hot?.4:.1))lightTNT(xx,yy);break;
+   case FUSE:if(life[j]===0&&r<(hot?.8:.5))life[j]=1;break;
+   case ICE:if(r<(hot?.3:.06))set(xx,yy,WATER);break;
+   case SNOW:if(r<(hot?.5:.12))set(xx,yy,WATER);break;
+   case WATER:life[j]=Math.min(255,life[j]+(hot?14:6));break;
+   case MUD:if(r<(hot?.15:.04))set(xx,yy,DIRT);break;
+   case MOLD:if(r<(hot?.3:.08))set(xx,yy,FIRE,rand(8,16));break;
+   case CONFETTI:if(r<(hot?.3:.1))set(xx,yy,FIRE,rand(4,9));break;
+   case SPONGE:if(life[j]>0&&r<(hot?.2:.05))life[j]--;break;
+   case SAND:if(hot&&r<.006)set(xx,yy,GLASS);break;
+   case METAL:life[j]=Math.min(255,life[j]+(hot?10:4));if(hot&&r<.004)set(xx,yy,LAVA);break;
+   case TUNGSTEN:case TITANIUM:life[j]=Math.min(255,life[j]+(hot?10:4));break;
+   case STONE:if(hot&&r<.004)set(xx,yy,LAVA);break;
+   case GOLD:if(hot&&r<.006)set(xx,yy,LAVA);break;
+  }
+ }
+}
+function powderStep(i,x,y,v){
+ if(v===DIRT){
+  for(const [dx,dy] of N4)if(get(x+dx,y+dy)===WATER&&Math.random()<.04){set(x+dx,y+dy,EMPTY);set(x,y,MUD);return;}
+ }else if(v===CEMENT){
+  for(const [dx,dy] of N4)if(get(x+dx,y+dy)===WATER&&Math.random()<.06){set(x+dx,y+dy,EMPTY);set(x,y,STONE);return;}
+ }else if(v===SEED){
+  const b=get(x,y+1);
+  if((b===MUD||b===DIRT)&&Math.random()<.03){
+   let wet=b===MUD;
+   if(!wet)for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)if(get(x+dx,y+dy)===WATER)wet=true;
+   if(wet){set(x,y,PLANT);return;}
+  }
+ }else if(v===EMBER){
+  life[i]--;
+  if(life[i]<=0){set(x,y,Math.random()<.55?ASH:EMPTY);return;}
+  for(const [dx,dy] of N4)if(get(x+dx,y+dy)===WATER){set(x,y,STEAM,rand(8,14));return;}
+  if(Math.random()<.4)burnAt(x,y,false);
+ }else if(v===SNOW){
+  if(Math.random()<.4)return;
+ }else if(v===CONFETTI){
+  if(Math.random()<.5)return;
+  if(Math.random()<.3){const d=Math.random()<.5?-1:1;if(get(x+d,y)===EMPTY&&move(i,x+d,y))return;}
+ }
+ if(move(i,x,y+1))return;
+ const b=get(x,y+1);
+ if(LD[b]!==undefined&&LD[b]<PD[v]&&Math.random()<.16){swap(i,idx(x,y+1));return;}
+ const dir=Math.random()<.5?-1:1;
+ if(get(x+dir,y+1)===EMPTY&&move(i,x+dir,y+1))return;
+ if(get(x-dir,y+1)===EMPTY&&move(i,x-dir,y+1))return;
+}
+
+const GRAV=new Uint8Array(128),BUOY=new Uint8Array(128);
+[WALL,STONE,WOOD,PLANT,ICE,METAL,GLASS,TNT,GOLD,TUNGSTEN,TITANIUM,SPONGE,FUSE].forEach(v=>GRAV[v]=1);
+[WOOD,ICE,PLANT,SPONGE,FUSE].forEach(v=>BUOY[v]=1);
+let gravOn=false,gravLoose=false,anchorWalls=true,gravMark=null,gravId=0,tipOn=true,tipLock=null,tipUntil=null,tipBodies=[];
+document.getElementById('solidGravity').addEventListener('change',e=>{gravOn=e.target.checked;});
+document.getElementById('gravMode').addEventListener('change',e=>{gravLoose=e.target.value==='loose';});
+document.getElementById('anchorWalls').addEventListener('change',e=>{anchorWalls=e.target.checked;});
+document.getElementById('tipOver').addEventListener('change',e=>{tipOn=e.target.checked;});
+function canFallInto(t){return t===EMPTY||t===LIGHTNING||isLiquid(t)||isGas(t)}
+function ensureTip(){
+ if(!tipLock||tipLock.length!==grid.length){tipLock=new Uint8Array(grid.length);tipUntil=new Uint32Array(grid.length);tipBodies=[];}
+}
+function resetTip(){tipBodies=[];if(tipLock){tipLock.fill(0);tipUntil.fill(0);}}
+function createTip(comp,s,px,py){
+ let minx=1e9,maxx=-1,miny=1e9,maxy=-1;
+ for(const c of comp){const cx=c%cols,cy=(c/cols)|0;if(cx<minx)minx=cx;if(cx>maxx)maxx=cx;if(cy<miny)miny=cy;if(cy>maxy)maxy=cy;}
+ const w=maxx-minx+1,h=maxy-miny+1,map=new Int32Array(w*h).fill(-1),vals=[],lifes=[],alive=[];
+ comp.forEach((c,k)=>{const cx=c%cols,cy=(c/cols)|0;map[(cy-miny)*w+(cx-minx)]=k;vals.push(grid[c]);lifes.push(life[c]);alive.push(1);});
+ for(const c of comp)tipLock[c]=1;
+ tipBodies.push({ox:minx,oy:miny,w,h,map,vals,lifes,alive,s,px,py,th:0,omega:.04,cells:comp.slice(),srcOf:comp.map((_,k)=>k),under:new Map()});
+}
+function tryTip(comp,cid){
+ if(comp.length<2)return;
+ let sumx=0,minS=1e9,maxS=-1e9,minC=-1,maxC=-1,hardN=0;
+ for(const c of comp){
+  const cx=c%cols,cy=(c/cols)|0;sumx+=cx+.5;
+  if(tipUntil[c]>frame)return;
+  let hard=false;
+  if(cy+1>=rows)hard=true;
+  else{const bc=c+cols;if(gravMark[bc]!==cid&&!canFallInto(grid[bc]))hard=true;}
+  if(hard){
+   hardN++;
+   if(cx<minS){minS=cx;minC=c;}else if(cx===minS&&c>minC)minC=c;
+   if(cx+1>maxS){maxS=cx+1;maxC=c;}else if(cx+1===maxS&&c>maxC)maxC=c;
+  }
+ }
+ if(!hardN)return;
+ const com=sumx/comp.length;
+ if(com<minS)createTip(comp,-1,minS,((minC/cols)|0)+1);
+ else if(com>maxS)createTip(comp,1,maxS,((maxC/cols)|0)+1);
+}
+function tipRaster(b,th,force){
+ const a=b.s*th,co=Math.cos(a),si=Math.sin(a),out=[],src=[];
+ let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+ for(const [qx,qy] of [[b.ox,b.oy],[b.ox+b.w,b.oy],[b.ox,b.oy+b.h],[b.ox+b.w,b.oy+b.h]]){
+  const rx=qx-b.px,ry=qy-b.py,x2=b.px+rx*co-ry*si,y2=b.py+rx*si+ry*co;
+  if(x2<mnx)mnx=x2;if(x2>mxx)mxx=x2;if(y2<mny)mny=y2;if(y2>mxy)mxy=y2;
+ }
+ for(let y=Math.floor(mny);y<Math.ceil(mxy);y++)for(let x=Math.floor(mnx);x<Math.ceil(mxx);x++){
+  const rx=x+.5-b.px,ry=y+.5-b.py,sx=b.px+rx*co+ry*si,sy=b.py-rx*si+ry*co;
+  const ix=Math.floor(sx)-b.ox,iy=Math.floor(sy)-b.oy;
+  if(ix<0||iy<0||ix>=b.w||iy>=b.h)continue;
+  const k=b.map[iy*b.w+ix];if(k<0||!b.alive[k])continue;
+  if(!inBounds(x,y)){if(force)continue;return null;}
+  const c=idx(x,y);
+  if(!canFallInto(grid[c])){if(force)continue;return null;}
+  out.push(c);src.push(k);
+ }
+ return {out,src};
+}
+function eraseTip(b){
+ for(let k=0;k<b.cells.length;k++){
+  const c=b.cells[k],s=b.srcOf[k];
+  tipLock[c]=0;
+  if(grid[c]!==b.vals[s]){b.alive[s]=0;continue;}
+  b.lifes[s]=life[c];
+  const u=b.under.get(c);
+  if(u){grid[c]=u.v;life[c]=u.l;}else{grid[c]=EMPTY;life[c]=0;}
+ }
+ b.under.clear();b.cells=[];b.srcOf=[];
+}
+function applyTip(b,r,th){
+ for(let k=0;k<r.out.length;k++){
+  const c=r.out[k],s=r.src[k],t=grid[c];
+  if(isLiquid(t))b.under.set(c,{v:t,l:life[c]});
+  grid[c]=b.vals[s];life[c]=b.lifes[s];tipLock[c]=1;
+ }
+ b.cells=r.out;b.srcOf=r.src;b.th=th;
+}
+function finishTip(b){
+ for(const c of b.cells){tipLock[c]=0;if(b.th===0)tipUntil[c]=frame+90;}
+}
+function stepTips(){
+ ensureTip();
+ if(!tipBodies.length)return;
+ const list=tipBodies;tipBodies=[];
+ for(const b of list){
+  eraseTip(b);
+  if(!gravOn||!tipOn){applyTip(b,tipRaster(b,b.th,true),b.th);finishTip(b);continue;}
+  let ok=false;
+  for(let t=0;t<4&&!ok;t++){
+   const th=Math.min(Math.PI/2,b.th+b.omega/(1<<t)),r=tipRaster(b,th,false);
+   if(r){applyTip(b,r,th);ok=true;}
+  }
+  if(!ok){applyTip(b,tipRaster(b,b.th,true),b.th);finishTip(b);continue;}
+  b.omega=Math.min(.3,b.omega+.025);
+  if(b.th>=Math.PI/2-1e-4)finishTip(b);else tipBodies.push(b);
+ }
+}
+function solidGravity(){
+ ensureTip();
+ if(!gravMark||gravMark.length!==grid.length)gravMark=new Uint32Array(grid.length);
+ if(gravId>4e9){gravMark.fill(0);gravId=0;}
+ if(gravLoose){
+  for(let y=rows-2;y>=0;y--)for(let x=0;x<cols;x++){
+   const i=idx(x,y),v=grid[i];
+   if(!GRAV[v]||tipLock[i]||(v===WALL&&anchorWalls))continue;
+   const j=i+cols,t=grid[j];
+   if(canFallInto(t)&&!(BUOY[v]&&isLiquid(t)))swap(i,j);
+  }
+  return;
+ }
+ const base=gravId+1;
+ for(let y=rows-1;y>=0;y--)for(let x=0;x<cols;x++){
+  const i=idx(x,y),v=grid[i];
+  if(!GRAV[v]||tipLock[i]||gravMark[i]>=base)continue;
+  if(v===WALL&&anchorWalls)continue;
+  const cid=++gravId,comp=[i];gravMark[i]=cid;
+  let supported=false,anchored=false,allBuoy=true;
+  for(let h=0;h<comp.length;h++){
+   const c=comp[h],cx=c%cols,cy=(c/cols)|0;
+   if(!BUOY[grid[c]])allBuoy=false;
+   for(const [dx,dy] of N4){
+    const nx=cx+dx,ny=cy+dy;if(!inBounds(nx,ny))continue;
+    const n=idx(nx,ny),t=grid[n];
+    if(t===WALL&&anchorWalls){supported=true;if(dy!==1)anchored=true;continue;}
+    if(GRAV[t]&&!tipLock[n]&&gravMark[n]<base){gravMark[n]=cid;comp.push(n);}
+   }
+  }
+  if(!supported){
+   for(const c of comp){
+    if(((c/cols)|0)+1>=rows){supported=true;break;}
+    const bc=c+cols,t=grid[bc];
+    if(gravMark[bc]===cid&&GRAV[t])continue;
+    if(!canFallInto(t)||(allBuoy&&isLiquid(t))){supported=true;break;}
+   }
+  }
+  if(supported){
+   if(tipOn&&!anchored)tryTip(comp,cid);
+   continue;
+  }
+  comp.sort((a,b)=>b-a);
+  for(const c of comp){swap(c,c+cols);gravMark[c+cols]=cid;}
+ }
+}
+function hotTouch(x,y,t,k){
+ const r=Math.random();
+ switch(t){
+  case WOOD:if(r<.02*k)set(x,y,FIRE,rand(12,35));break;
+  case OIL:if(r<.06*k)set(x,y,FIRE,rand(15,38));break;
+  case PLANT:case SEED:case CONFETTI:case MOLD:if(r<.03*k)set(x,y,FIRE,rand(8,20));break;
+  case GAS:if(r<.2*k)set(x,y,FIRE,rand(5,10));break;
+  case GUNPOWDER:if(r<.12*k)igniteGunpowder(x,y);break;
+  case NITRO:if(r<.05*k)detonateNitro(x,y);break;
+  case TNT:if(r<.02*k)lightTNT(x,y);break;
+  case FUSE:if(life[idx(x,y)]===0&&r<.1*k)life[idx(x,y)]=1;break;
+ }
+}
+function metalHeat(){
+ for(let i=0;i<grid.length;i++){
+  if(!HM[grid[i]])continue;
+  let h=life[i];if(h===0)continue;
+  const x=i%cols,y=(i/cols)|0;
+  for(let n=0;n<2;n++){
+   const d=N4[(Math.random()*4)|0],nx=x+d[0],ny=y+d[1];
+   if(!inBounds(nx,ny))continue;
+   const j=idx(nx,ny),t=grid[j];
+   if(HM[t]){
+    if(life[j]!==h){h=(h+life[j])>>1;life[i]=h;life[j]=h;}
+   }else if(t===WATER){
+    const w=life[j];
+    if(h>w){const q=Math.max(1,(h-w)>>2);life[j]=Math.min(255,w+q);h-=q;life[i]=h;}
+   }else if(t===ICE||t===SNOW){
+    if(h>30&&Math.random()<.1){set(nx,ny,WATER);h=Math.max(0,h-8);life[i]=h;}
+   }else{
+    if(h>=100)hotTouch(nx,ny,t,Math.min(1,(h-100)/155));
+    if((t===EMPTY||t===SMOKE||t===STEAM||t===GAS)&&Math.random()<.4){h--;life[i]=h;}
+   }
+   if(h===0)break;
+  }
+  if(h>0&&Math.random()<.01)life[i]=h-1;
+ }
+}
+function heatTint(c,h){
+ if(h<20)return c;
+ const t=Math.min(1,(h-20)/110);
+ let r=c[0]+(215-c[0])*t,g=c[1]+(40-c[1])*t,b=c[2]+(25-c[2])*t;
+ if(h>130){const u=Math.min(1,(h-130)/100);r+=(255-r)*u;g+=(150-g)*u;b+=(50-b)*u;}
+ if(h>230){const u=(h-230)/25;g+=(230-g)*u*.6;b+=(170-b)*u*.6;}
+ return [r,g,b];
+}
+
+const ELEC=new Uint8Array(128),NODE=new Uint8Array(128),GATEV=new Uint8Array(128);
+for(let v=WIRE;v<=LSENSOR;v++){ELEC[v]=1;STATIC[v]=1;}
+for(let v=AND;v<=BUFFER;v++)GATEV[v]=1;
+[WIRE,BATTERY,CLOCK,WSENSOR,TSENSOR,PLATE,LSENSOR,METAL,GOLD,TUNGSTEN,TITANIUM].forEach(v=>NODE[v]=1);
+const DX=[1,0,-1,0],DY=[0,1,0,-1],PER=[20,40,80,160];
+let elPow=null,elDrv=null,elAux=null,elVis=null,elList=null,elStamp=0,elWasOn=false,audioCtx=null,osc=null;
+window.addEventListener('pointerdown',()=>{if(!audioCtx&&window.AudioContext){try{audioCtx=new AudioContext();}catch(e){}}});
+function setBuzz(on){
+ if(!audioCtx)return;
+ if(on&&!osc){
+  osc=audioCtx.createOscillator();const g=audioCtx.createGain();
+  osc.type='square';osc.frequency.value=440;g.gain.value=.03;osc.connect(g);g.connect(audioCtx.destination);osc.start();
+ }else if(!on&&osc){try{osc.stop();osc.disconnect();}catch(e){}osc=null;}
+}
+function ensureEl(){
+ const n=grid.length;
+ if(!elPow||elPow.length!==n){elPow=new Uint8Array(n);elDrv=new Uint8Array(n);elAux=new Uint8Array(n);elVis=new Uint32Array(n);elList=new Int32Array(n);elStamp=0;}
+}
+function isNodeAt(i){const v=grid[i];return NODE[v]===1||(v===SWITCH&&(life[i]&1)===1)||(v===BUTTON&&life[i]>0);}
+function isSeedAt(i){
+ const v=grid[i];
+ return v===BATTERY||(v===CLOCK&&life[i]<(PER[elAux[i]&3]>>1))||((v===WSENSOR||v===TSENSOR||v===PLATE||v===LSENSOR)&&(life[i]&1)===1);
+}
+function gateOut(v,ones,n){
+ switch(v){
+  case AND:return n>0&&ones===n?1:0;
+  case OR:case BUFFER:return ones>0?1:0;
+  case NOT:case NOR:return ones===0?1:0;
+  case NAND:return n>0&&ones===n?0:1;
+  case XOR:return ones&1;
+  case XNOR:return n>0&&!(ones&1)?1:0;
+ }
+ return 0;
+}
+function gateIn(x,y,s){
+ const nx=x+DX[s],ny=y+DY[s];if(!inBounds(nx,ny))return -1;
+ const j=idx(nx,ny);
+ if(isNodeAt(j))return elPow[j];
+ if(GATEV[grid[j]]&&(elAux[j]&3)===((s+2)&3))return life[j]&1;
+ return -1;
+}
+function pokeTarget(cx,cy){
+ const order=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+ for(const [dx,dy] of order){
+  const x=cx+dx,y=cy+dy;if(!inBounds(x,y))continue;
+  const v=grid[idx(x,y)];
+  if(v===SWITCH||v===BUTTON||v===CLOCK||GATEV[v])return idx(x,y);
+ }
+ return -1;
+}
+function pokeAt(cx,cy){
+ ensureEl();
+ const i=pokeTarget(cx,cy);if(i<0)return;
+ const v=grid[i];
+ if(v===SWITCH)life[i]^=1;
+ else if(v===BUTTON)life[i]=8;
+ else elAux[i]=(elAux[i]+1)&3;
+}
+function holdPoke(cx,cy){
+ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+  const x=cx+dx,y=cy+dy;if(!inBounds(x,y))continue;
+  const i=idx(x,y);if(grid[i]===BUTTON)life[i]=8;
+ }
+}
+function elecStep(){
+ ensureEl();
+ const n=grid.length;
+ let any=false;
+ for(let i=0;i<n;i++)if(ELEC[grid[i]]){any=true;break;}
+ if(!any){if(elWasOn){elPow.fill(0);elWasOn=false;setBuzz(false);}return;}
+ elWasOn=true;
+ elPow.fill(0);elDrv.fill(0);
+ for(let i=0;i<n;i++){
+  if(GATEV[grid[i]]&&(life[i]&1)){
+   const d=elAux[i]&3,tx=(i%cols)+DX[d],ty=((i/cols)|0)+DY[d];
+   if(inBounds(tx,ty))elDrv[idx(tx,ty)]=1;
+  }
+ }
+ const stamp=++elStamp;
+ for(let i=0;i<n;i++){
+  if(elVis[i]===stamp||!isNodeAt(i))continue;
+  let head=0,tail=0,seed=false;
+  elList[tail++]=i;elVis[i]=stamp;
+  while(head<tail){
+   const c=elList[head++],cx=c%cols,cy=(c/cols)|0;
+   if(!seed&&(elDrv[c]===1||isSeedAt(c)))seed=true;
+   for(let k=0;k<4;k++){
+    let nx=cx+DX[k],ny=cy+DY[k];if(!inBounds(nx,ny))continue;
+    let j=idx(nx,ny);
+    while(grid[j]===CROSS){nx+=DX[k];ny+=DY[k];if(!inBounds(nx,ny)){j=-1;break;}j=idx(nx,ny);}
+    if(j<0||elVis[j]===stamp||!isNodeAt(j))continue;
+    elVis[j]=stamp;elList[tail++]=j;
+   }
+  }
+  if(seed)for(let q=0;q<tail;q++)elPow[elList[q]]=1;
+ }
+ elDrv.fill(0);
+ for(let i=0;i<n;i++){
+  const v=grid[i];if(!GATEV[v])continue;
+  const x=i%cols,y=(i/cols)|0,d=elAux[i]&3;
+  let ones=0,cnt=0;
+  for(let s=0;s<4;s++){if(s===d)continue;const q=gateIn(x,y,s);if(q>=0){cnt++;ones+=q;}}
+  elDrv[i]=gateOut(v,ones,cnt);
+ }
+ for(let i=0;i<n;i++)if(GATEV[grid[i]])life[i]=(life[i]&~1)|elDrv[i];
+ let buzz=0;
+ for(let i=0;i<n;i++){
+  const v=grid[i];if(v<LAMP||v>BUZZER)continue;
+  const x=i%cols,y=(i/cols)|0;let on=false;
+  for(let k=0;k<4&&!on;k++){
+   const nx=x+DX[k],ny=y+DY[k];if(!inBounds(nx,ny))continue;
+   const j=idx(nx,ny);
+   if(isNodeAt(j)){if(elPow[j]===1)on=true;}
+   else if(GATEV[grid[j]]&&(life[j]&1)===1&&(elAux[j]&3)===((k+2)&3))on=true;
+  }
+  if(!on)continue;
+  elPow[i]=1;
+  if(v===HEATER)burnAt(x,y,false);
+  else if(v===IGNITER){
+   if(Math.random()<.35){const k=(Math.random()*4)|0,nx=x+DX[k],ny=y+DY[k];if(inBounds(nx,ny)&&grid[idx(nx,ny)]===EMPTY)set(nx,ny,LIGHTNING);}
+  }else if(v===BUZZER)buzz++;
+ }
+ setBuzz(buzz>0);
+ for(let i=0;i<n;i++){
+  const v=grid[i];if(v<WSENSOR||v>LSENSOR)continue;
+  const x=i%cols,y=(i/cols)|0;let t=0;
+  if(v===WSENSOR){
+   for(let k=0;k<4;k++)if(get(x+DX[k],y+DY[k])===WATER)t=1;
+  }else if(v===TSENSOR){
+   for(let k=0;k<4;k++){
+    const nx=x+DX[k],ny=y+DY[k];if(!inBounds(nx,ny))continue;
+    const j=idx(nx,ny),u=grid[j];
+    if(u===FIRE||u===BLUEFIRE||u===LAVA||u===EMBER||(HM[u]&&life[j]>=100)||(u===WATER&&life[j]>=BOIL_HEAT))t=1;
+   }
+  }else if(v===PLATE){
+   if(inBounds(x,y-1)){const u=grid[idx(x,y-1)];if(u!==EMPTY&&u!==LIGHTNING&&!isGas(u))t=1;}
+  }else{
+   for(let dy=-6;dy<=6&&!t;dy++)for(let dx=-6;dx<=6;dx++){
+    const nx=x+dx,ny=y+dy;if(!inBounds(nx,ny))continue;
+    const j=idx(nx,ny),u=grid[j];
+    if(u>=LAMP&&u<=LEDB&&elPow[j]===1){t=1;break;}
+   }
+  }
+  life[i]=t;
+ }
+ for(let i=0;i<n;i++){
+  const v=grid[i];
+  if(v===BUTTON){if(life[i]>0)life[i]--;}
+  else if(v===CLOCK)life[i]=(life[i]+1)%PER[elAux[i]&3];
+ }
+}
+function lg(c,o){return o?[c[0]+(255-c[0])*.45,c[1]+(255-c[1])*.45,c[2]+(255-c[2])*.45]:c;}
+function elecColor(v,i,pw){
+ const o=life[i]&1,n=(i*7+frame*3)%30;
+ switch(v){
+  case WIRE:return pw?[255,222+n/2,100+n]:[168,98,52];
+  case BATTERY:return [48+((frame>>3)&1)*20,150,80];
+  case SWITCH:return o?[60,205,92]:[150,55,55];
+  case BUTTON:return life[i]>0?[255,140,140]:[190,60,60];
+  case CLOCK:return life[i]<(PER[elAux[i]&3]>>1)?[205,155,255]:[120,72,185];
+  case AND:return lg([70,110,215],o);
+  case OR:return lg([60,170,205],o);
+  case NOT:return lg([220,120,50],o);
+  case NAND:return lg([110,70,200],o);
+  case NOR:return lg([200,70,150],o);
+  case XOR:return lg([210,180,60],o);
+  case XNOR:return lg([160,200,70],o);
+  case BUFFER:return lg([150,155,170],o);
+  case CROSS:return [122,102,88];
+  case LAMP:return pw?[255,244,170]:[95,90,70];
+  case LEDR:return pw?[255,70,70]:[100,35,35];
+  case LEDG:return pw?[80,255,110]:[35,90,45];
+  case LEDB:return pw?[90,150,255]:[35,50,110];
+  case HEATER:return pw?[255,120+n,35]:[96,62,62];
+  case IGNITER:return pw?[255,235,100]:[120,100,60];
+  case BUZZER:return pw?[225,225,245]:[70,70,82];
+  case WSENSOR:return o?[130,215,255]:[60,110,160];
+  case TSENSOR:return o?[255,160,70]:[160,90,60];
+  case PLATE:return o?[235,215,125]:[140,130,100];
+  case LSENSOR:return o?[255,255,160]:[150,150,60];
+ }
+ return [255,0,255];
+}
+const ov=document.getElementById('ov'),octx=ov.getContext('2d');
+function drawOverlay(gates){
+ const w=stage.clientWidth,h=stage.clientHeight;
+ if(ov.width!==w||ov.height!==h){ov.width=w;ov.height=h;}
+ octx.clearRect(0,0,w,h);
+ if(!gates.length)return;
+ const sx=w/cols,sy=h/rows,s=Math.max(sx,sy)*.95;
+ for(const i of gates){
+  const d=elAux[i]&3,cx=((i%cols)+.5)*sx,cy=(((i/cols)|0)+.5)*sy,ux=DX[d],uy=DY[d],px=-uy,py=ux;
+  octx.beginPath();
+  octx.moveTo(cx+ux*s,cy+uy*s);
+  octx.lineTo(cx-ux*s*.6+px*s*.75,cy-uy*s*.6+py*s*.75);
+  octx.lineTo(cx-ux*s*.6-px*s*.75,cy-uy*s*.6-py*s*.75);
+  octx.closePath();
+  octx.fillStyle=(life[i]&1)?'#fff7a8':'#ffffffd0';
+  octx.fill();
  }
 }
 function simulate(){
+ if(gravOn){stepTips();if(frame%2===0)solidGravity();}else if(tipBodies.length)stepTips();
  updated.fill(0);
+ if(blasts.length){const due=[],keep=[];for(const b of blasts){if(--b.d<=0)due.push(b);else keep.push(b);}blasts=keep;for(const b of due)explode(b.x,b.y,b.r);}
  const reverse=Math.random()<.5;
  for(let yy=rows-1;yy>=0;yy--){
   for(let k=0;k<cols;k++){
    const x=reverse?cols-1-k:k,y=yy,i=idx(x,y),v=grid[i];
-   if(v===EMPTY||v===WALL||v===STONE||v===WOOD||v===PLANT||v===ICE||v===METAL||v===GLASS||updated[i])continue;
+   if(STATIC[v]||updated[i])continue;
    if(v===CLONE){
     let copied=EMPTY;
     for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const t=get(x+dx,y+dy);if(t!==EMPTY&&t!==CLONE&&t!==WALL)copied=t;}
     if(copied!==EMPTY&&Math.random()<.02){set(x+rand(-1,1),y+rand(-1,1),copied);}
    }else if(v===LIGHTNING){
-    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=x+dx,yy2=y+dy,t=get(xx,yy2);if(t===WATER&&Math.random()<.65)set(xx,yy2,FIRE,rand(5,12));if(t===WOOD&&Math.random()<.45)set(xx,yy2,FIRE,rand(10,20));}
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+     const xx=x+dx,yy2=y+dy,t=get(xx,yy2);
+     if(t===WATER&&Math.random()<.65)set(xx,yy2,FIRE,rand(5,12));
+     else if(t===WOOD&&Math.random()<.45)set(xx,yy2,FIRE,rand(10,20));
+     else if(t===GUNPOWDER&&Math.random()<.5)igniteGunpowder(xx,yy2);
+     else if(t===GAS&&Math.random()<.7)set(xx,yy2,FIRE,rand(5,10));
+     else if(t===NITRO&&Math.random()<.5)detonateNitro(xx,yy2);
+     else if(t===TNT&&Math.random()<.3)lightTNT(xx,yy2);
+     else if(t===FUSE&&Math.random()<.6&&life[idx(xx,yy2)]===0)life[idx(xx,yy2)]=1;
+    }
     set(x,y,EMPTY);
    }else if(v===GUNPOWDER){
     if(move(i,x,y+1))continue;
     const d=Math.random()<.5?-1:1;if(get(x+d,y+1)===EMPTY&&move(i,x+d,y+1))continue;
-    if(Math.random()<.002){for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const xx=x+dx,yy2=y+dy;if(get(xx,yy2)===GUNPOWDER)set(xx,yy2,FIRE,rand(15,35));}set(x,y,FIRE,rand(15,35));}
    }else if(v===SALT){
     if(get(x,y+1)===WATER){set(x,y,EMPTY);continue;}
+    let melted=false;
+    for(const [dx,dy] of N4){const xx=x+dx,yy2=y+dy,t=get(xx,yy2);if((t===ICE||t===SNOW)&&Math.random()<.06){set(xx,yy2,WATER);set(x,y,EMPTY);melted=true;break;}}
+    if(melted)continue;
     if(move(i,x,y+1))continue;
     const d=Math.random()<.5?-1:1;if(get(x+d,y+1)===EMPTY)move(i,x+d,y+1);
    }else if(v===BACTERIA){
-    if(isLiquid(get(x,y+1))&&Math.random()<.03){set(x,y,EMPTY);continue;}
-    if(Math.random()<.015){const dx=rand(-1,1),dy=rand(-1,1);if(get(x+dx,y+dy)===WATER)set(x+dx,y+dy,BACTERIA);}
-   }else if(v===SAND){
-    if(move(i,x,y+1))continue;
-    const dir=Math.random()<.5?-1:1;
-    if(get(x,y+1)===WATER||get(x,y+1)===OIL){const below=idx(x,y+1);if(grid[below]===WATER||grid[below]===OIL){if(Math.random()<.16){swap(i,below);continue;}}}
-    if(get(x+dir,y+1)===EMPTY&&move(i,x+dir,y+1))continue;
-    if(get(x-dir,y+1)===EMPTY&&move(i,x-dir,y+1))continue;
-   }else if(isLiquid(v)){
-    if(v===LAVA){burnAt(x,y);if(get(x,y+1)===WATER){set(x,y,STONE);set(x,y+1,STEAM,rand(8,20));continue;}if(Math.random()<.02){set(x,y,STONE);continue;}}
-    if(v===ACID){
-     let did=false;
-     for(const [dx,dy] of [[0,1],[1,0],[-1,0],[0,-1]]){
-      const xx=x+dx,yy2=y+dy,t=get(xx,yy2);
-      if([WALL,STONE,WOOD,PLANT].includes(t)&&Math.random()<.04){set(xx,yy2,EMPTY);if(Math.random()<.4)set(x,y,EMPTY);did=true;break;}
-     }if(did)continue;
+    let food=0,fx=0,fy=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+     if(!dx&&!dy)continue;
+     const xx=x+dx,yy2=y+dy;if(!inBounds(xx,yy2))continue;
+     const t=grid[idx(xx,yy2)];
+     if(t!==EMPTY&&t!==BACTERIA){food++;if(Math.random()*food<1){fx=xx;fy=yy2;}}
     }
+    if(food===0){if(Math.random()<.004)set(x,y,EMPTY);continue;}
+    if(Math.random()<.18){
+     const j=idx(fx,fy);
+     if(Math.random()<.5)set(fx,fy,BACTERIA);else set(fx,fy,EMPTY);
+     updated[j]=1;
+    }
+   }else if(v===MOLD){
+    if(Math.random()<.06){
+     const xx=x+rand(-1,1),yy2=y+rand(-1,1),t=get(xx,yy2);
+     if(t===WOOD||t===PLANT||t===DIRT||t===MUD||t===SLIME||t===SPONGE||t===FUSE||t===SEED){set(xx,yy2,MOLD);updated[idx(xx,yy2)]=1;}
+    }
+   }else if(v===SPONGE){
+    if(life[i]<8){
+     const xx=x+rand(-1,1),yy2=y+rand(-1,1),t=get(xx,yy2);
+     if((t===WATER||t===OIL||t===SLIME)&&Math.random()<.5){set(xx,yy2,EMPTY);life[i]++;}
+    }else if(get(x,y+1)===EMPTY&&Math.random()<.04){
+     set(x,y+1,WATER);updated[idx(x,y+1)]=1;life[i]--;
+    }
+   }else if(v===FUSE){
+    if(life[i]>0){
+     life[i]++;
+     if(life[i]>=16){
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+       const xx=x+dx,yy2=y+dy;if(!inBounds(xx,yy2))continue;
+       const j=idx(xx,yy2),t=grid[j];
+       if(t===FUSE&&life[j]===0)life[j]=1;
+       else if(t===TNT)lightTNT(xx,yy2);
+       else if(t===GUNPOWDER)igniteGunpowder(xx,yy2);
+      }
+      set(x,y,FIRE,rand(8,16));
+     }
+    }
+   }else if(PD[v]!==undefined){
+    powderStep(i,x,y,v);
+   }else if(isLiquid(v)){
+    if(v===LAVA){
+     let cooled=false;
+     for(let dy=-1;dy<=1&&!cooled;dy++)for(let dx=-1;dx<=1;dx++){
+      if(get(x+dx,y+dy)===WATER){set(x+dx,y+dy,STEAM,rand(8,20));cooled=true;break;}
+     }
+     if(cooled){set(x,y,STONE);continue;}
+     burnAt(x,y,false);
+    }else if(v===ACID){
+     let did=false;
+     for(const [dx,dy] of N4){
+      const xx=x+dx,yy2=y+dy,t=get(xx,yy2);
+      if((t===WALL||t===STONE||t===WOOD||t===PLANT||t===MOLD||t===SPONGE||t===FUSE||t===TNT||t===CEMENT||t===RUST)&&Math.random()<.04){set(xx,yy2,EMPTY);if(Math.random()<.4)set(x,y,EMPTY);did=true;break;}
+     }
+     if(did)continue;
+    }else if(v===CRYO){
+     let gone=false;
+     for(const [dx,dy] of N4){
+      const xx=x+dx,yy2=y+dy,t=get(xx,yy2);
+      if(t===WATER&&Math.random()<.18){set(xx,yy2,ICE);if(Math.random()<.25){set(x,y,EMPTY);gone=true;break;}}
+      else if((t===FIRE||t===BLUEFIRE)&&Math.random()<.5){set(xx,yy2,EMPTY);if(Math.random()<.3){set(x,y,EMPTY);gone=true;break;}}
+      else if(t===STEAM&&Math.random()<.2)set(xx,yy2,WATER);
+     }
+     if(gone)continue;
+     if(Math.random()<.0012){set(x,y,EMPTY);continue;}
+    }else if(v===WATER){
+     let h=life[i];
+     if(h>0||Math.random()<.02){
+      const xx=x+rand(-1,1),yy2=y+rand(-1,1);
+      if(inBounds(xx,yy2)){
+       const j=idx(xx,yy2),t=grid[j];
+       if(t===WATER){if(life[j]!==h){h=(h+life[j])>>1;life[i]=h;life[j]=h;}}
+       else if(h>0&&(t===ICE||t===SNOW||t===CRYO)){h=Math.max(0,h-6);life[i]=h;}
+      }
+      if(h>0&&Math.random()<.04){h--;life[i]=h;}
+      if(h>=BOIL_HEAT&&Math.random()<.05){
+       for(const [dx,dy] of N4){const nx=x+dx,ny=y+dy;if(inBounds(nx,ny)&&grid[idx(nx,ny)]===WATER)life[idx(nx,ny)]=Math.max(0,life[idx(nx,ny)]-10);}
+       set(x,y,STEAM,rand(25,45));continue;
+      }
+     }
+    }
+    if(VISC[v]!==undefined&&Math.random()>VISC[v])continue;
+    const below=get(x,y+1);
+    if(LD[below]!==undefined&&LD[below]<LD[v]&&Math.random()<.5){swap(i,idx(x,y+1));continue;}
     if(move(i,x,y+1))continue;
     const dir=Math.random()<.5?-1:1;
     if(get(x+dir,y+1)===EMPTY&&Math.random()<.8&&move(i,x+dir,y+1))continue;
     if(get(x-dir,y+1)===EMPTY&&move(i,x-dir,y+1))continue;
-    const spread=v===WATER?rand(1,4):rand(1,2);
+    const spread=(v===MUD||v===SLIME)?1:v===WATER?rand(1,4):v===MERCURY?rand(1,3):rand(1,2);
     let moved=false;
     for(let s=1;s<=spread;s++){const d=Math.random()<.5?-s:s;if(get(x+d,y)===EMPTY&&move(i,x+d,y)){moved=true;break;}}
     if(moved)continue;
-    // Water and oil separate somewhat; acid colors remain reactive.
    }else if(isGas(v)){
     if(v===FIRE){
-     burnAt(x,y);life[i]--;
-     if(life[i]===0||Math.random()<.04){set(x,y,Math.random()<.65?SMOKE:EMPTY,rand(12,30));continue;}
+     burnAt(x,y,false);life[i]--;
+     if(life[i]===0||Math.random()<.04){
+      const r=Math.random();
+      if(r<.55)set(x,y,SMOKE,rand(12,30));
+      else if(r<.61)set(x,y,ASH);
+      else if(r<.64)set(x,y,EMBER,rand(90,180));
+      else set(x,y,EMPTY);
+      continue;
+     }
      if(get(x,y-1)===EMPTY&&Math.random()<.72){move(i,x,y-1);continue;}
      const d=Math.random()<.5?-1:1;if(get(x+d,y-1)===EMPTY&&move(i,x+d,y-1))continue;
+    }else if(v===BLUEFIRE){
+     burnAt(x,y,true);life[i]--;
+     if(life[i]===0||Math.random()<.015){set(x,y,Math.random()<.5?FIRE:SMOKE,rand(4,12));continue;}
+     if(get(x,y-1)===EMPTY&&Math.random()<.8){move(i,x,y-1);continue;}
+     const d=Math.random()<.5?-1:1;if(get(x+d,y-1)===EMPTY&&move(i,x+d,y-1))continue;
+    }else if(v===GAS){
+     if(Math.random()<.0005){set(x,y,EMPTY);continue;}
+     const d=Math.random()<.5?-1:1;
+     if(get(x,y-1)===EMPTY&&Math.random()<.5&&move(i,x,y-1))continue;
+     if(get(x+d,y-1)===EMPTY&&move(i,x+d,y-1))continue;
+     if(get(x+d,y)===EMPTY&&move(i,x+d,y))continue;
+     if(get(x-d,y)===EMPTY)move(i,x-d,y);
     }else{
+     if(v===STEAM&&get(x,y-1)===WATER&&Math.random()<.6){swap(i,idx(x,y-1));continue;}
      life[i]--;if(life[i]===0){set(x,y,EMPTY);continue;}
      if(get(x,y-1)===EMPTY&&move(i,x,y-1))continue;
      const d=Math.random()<.5?-1:1;if(get(x+d,y-1)===EMPTY&&move(i,x+d,y-1))continue;
@@ -314,26 +970,29 @@ function simulate(){
    }
   }
  }
- // Plants grow into adjacent empty cells when water is nearby.
+ // Plants grow into adjacent empty cells when water or mud is nearby.
  if(frame%5===0){
   for(let y=rows-2;y>1;y--)for(let x=1;x<cols-1;x++)if(get(x,y)===PLANT&&Math.random()<.012){
-   let wet=false;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)if(get(x+dx,y+dy)===WATER)wet=true;
+   let wet=false;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const t=get(x+dx,y+dy);if(t===WATER||t===MUD)wet=true;}
    if(wet){const d=Math.random()<.5?-1:1;if(get(x,y-1)===EMPTY)set(x,y-1,PLANT);else if(get(x+d,y)===EMPTY)set(x+d,y,PLANT);}
   }
  }
+ metalHeat();
+ elecStep();
  frame++;
 }
 function hex(hex){const n=parseInt(hex.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255]}
 const rgb={};for(const m of materials)rgb[m.id]=hex(m.color);
 function draw(){
  const counts={};
+ const EP=elPow&&elPow.length===grid.length?elPow:null,glows=[],gates=[];
  for(let i=0;i<grid.length;i++){
   const v=grid[i],p=i*4;
   if(v===EMPTY){pixels[p]=12;pixels[p+1]=17;pixels[p+2]=27;pixels[p+3]=255;continue;}
   counts[v]=(counts[v]||0)+1;
   let c=rgb[v]||[255,255,255];
   if(v===SAND){const n=(i*17+frame*3)%24;c=[235,198+n,101+n%8];}
-  if(v===WATER){const n=(i*13+frame*5)%25;c=[35+n,115+n,210+n];}
+  if(v===WATER){const n=(i*13+frame*5)%25;c=[35+n,115+n,210+n];const h=life[i];if(h>25){const t=Math.min(1,(h-25)/75);c=[c[0]+(215-c[0])*t*.75,c[1]+(205-c[1])*t*.6,c[2]+(215-c[2])*t*.45];if(h>=BOIL_HEAT&&((i*7+frame*3)%11===0))c=[245,250,255];}}
   if(v===FIRE){const n=(i*7+frame*11)%80;c=n<40?[255,75+n,35]:[255,170+n,45];}
   if(v===SMOKE){const n=(i*5+frame)%25;c=[75+n,83+n,98+n];}
   if(v===STEAM){const n=(i*3+frame)%25;c=[170+n,205+n,218+n];}
@@ -347,9 +1006,51 @@ function draw(){
   if(v===SALT)c=[235,236,222];
   if(v===GUNPOWDER)c=[66,76,95];
   if(v===CLONE)c=[204,100,246];
+  if(v===BLUEFIRE){const n=(i*7+frame*11)%80;c=n<40?[35+n,120+n,255]:[130+n,200+n/2,255];}
+  if(v===SNOW){const n=(i*13+frame)%22;c=[232+n,240+n/2,255];}
+  if(v===DIRT){const n=(i*7)%18;c=[100+n,70+n,44+n/2];}
+  if(v===MUD){const n=(i*5)%14;c=[72+n,54+n,38+n/2];}
+  if(v===ASH){const n=(i*5)%30;c=[118+n,118+n,124+n];}
+  if(v===RUST){const n=(i*9)%36;c=[165+n,76+n/2,34];}
+  if(v===CEMENT){const n=(i*11)%22;c=[168+n,166+n,152+n];}
+  if(v===THERMITE){const n=(i*13)%40;c=[135+n,55+n/2,52];}
+  if(v===NITRO){const n=(i*9+frame*2)%30;c=[175+n,255,45+n];}
+  if(v===TNT){const sx=i%cols,sy=(i/cols)|0;c=((sx+sy)>>2)&1?[212,55,50]:[168,36,36];}
+  if(v===GAS){const n=(i*3+frame)%30;c=[172+n,158+n,212+n];}
+  if(v===MERCURY){const n=(i*7+frame*3)%40;c=[188+n,196+n,208+n/2];}
+  if(v===CRYO){const n=(i*11+frame*4)%50;c=[40+n,190+n/2,255];}
+  if(v===SLIME){const n=(i*9+frame)%30;c=[222+n/2,68+n,162+n];}
+  if(v===GOLD){const n=(i*13)%40;c=[218+n/2,168+n,30+n/2];}
+  if(v===EMBER){const n=(i*7+frame*9)%70;c=[195+n/2,55+n,14];}
+  if(v===MOLD){const n=(i*7)%30;c=[48+n/2,108+n,98+n/2];}
+  if(v===SPONGE){const sx=i%cols,sy=(i/cols)|0,t=life[i]/8;c=((sx*7+sy*13)%5===0)?[190,160,50]:[245,222,95];c=[c[0]*(1-.5*t),c[1]*(1-.25*t),c[2]+90*t];}
+  if(v===FUSE){c=life[i]>0?[255,150+((i*7+frame*13)%100),40]:[140,120,80];}
+  if(v===SEED){const n=(i*7)%30;c=[172+n/2,198+n/2,92];}
+  if(v===CONFETTI)c=CONF[((i*2654435761)>>>0)%CONF.length];
+  if(v===TUNGSTEN){const n=(i*7)%12;c=[78+n,84+n,96+n];}
+  if(v===TITANIUM){const n=(i*7)%14;c=[168+n,176+n,196+n];}
+  if(HM[v]&&life[i]>0)c=heatTint(c,life[i]);
+  if(ELEC[v]){
+   const pw=EP?EP[i]:0;
+   c=elecColor(v,i,pw);
+   if(pw&&((v>=LAMP&&v<=LEDB)||v===HEATER)&&glows.length<600)glows.push([i,c]);
+   if(GATEV[v])gates.push(i);
+  }else if(NODE[v]&&EP&&EP[i]){
+   c=[c[0]+(150-c[0])*.3,c[1]+(225-c[1])*.3,c[2]+(255-c[2])*.3];
+  }
   pixels[p]=c[0];pixels[p+1]=c[1];pixels[p+2]=c[2];pixels[p+3]=255;
  }
+ for(const [gi,gc] of glows){
+  const gx=gi%cols,gy=(gi/cols)|0;
+  for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){
+   const d=Math.sqrt(dx*dx+dy*dy);if(d>4.2)continue;
+   const x=gx+dx,y=gy+dy;if(!inBounds(x,y))continue;
+   const a=Math.pow(1-d/4.5,2)*.5,q=idx(x,y)*4;
+   pixels[q]+=gc[0]*a;pixels[q+1]+=gc[1]*a;pixels[q+2]+=gc[2]*a;
+  }
+ }
  ctx.putImageData(imageData,0,0);
+ drawOverlay(gates);
  if(showGrid&&cols<450){ctx.strokeStyle='rgba(255,255,255,.10)';ctx.lineWidth=1;ctx.beginPath();for(let x=0;x<cols;x+=8){ctx.moveTo(x,0);ctx.lineTo(x,rows)}for(let y=0;y<rows;y+=8){ctx.moveTo(0,y);ctx.lineTo(cols,y)}ctx.stroke();}
  status.style.display=showCounts?'block':'none';
  if(showCounts)status.textContent=`${paused?'PAUSED':'RUNNING'} · ${Object.values(counts).reduce((a,b)=>a+b,0).toLocaleString()} particles · ${cols}×${rows} · ${speedMultiplier}×`;
@@ -357,7 +1058,8 @@ function draw(){
 }
 function loop(){
  if(paintDown&&activePos)paint(activePos.x,activePos.y,eraseDown?ERASER:selected);
- if(!paused){stepAccumulator+=speedMultiplier;let safety=0;while(stepAccumulator>=1&&safety<8){simulate();stepAccumulator-=1;safety++;}}
+ if(paintDown&&activePos&&!eraseDown&&selected===POKE)holdPoke(activePos.x,activePos.y);
+ if(!paused){stepAccumulator+=speedMultiplier;let safety=0;while(stepAccumulator>=1&&safety<8){simulate();stepAccumulator-=1;safety++;}}else setBuzz(false);
  draw();requestAnimationFrame(loop);
 }
 // Every launch starts with a completely empty simulation.
